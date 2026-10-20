@@ -19,7 +19,7 @@ def worker():
                               'archive_path': Path(data['archive_path'])})
     # The parent keeps stdin open. EOF must stop even a blocked extractor.
     def watch_parent():
-        sys.stdin.buffer.read()
+        os.read(sys.stdin.fileno(), 1)
         os._exit(2)
     threading.Thread(target=watch_parent, daemon=True).start()
     result = run_download(request, lambda event: send({'kind': event.kind, 'data': event.data}))
