@@ -13,6 +13,7 @@ import AppKit
     @Published var selection = "all"
     @Published var pendingJobs: Set<String> = []
     private var client: BackendClient?
+    private var pendingCreation: JSONValue?
     private var eventTask: Task<Void, Never>?
     private var lastSequence = 0
     private var sessionID: String?
@@ -20,7 +21,8 @@ import AppKit
     private var needsRefresh = false
     private var buffered = ChangeBuffer()
     private var shuttingDown = false
-    init() {
+    init(client: BackendClient? = nil) {
+        self.client = client
         let defaultURL = FileManager.default.urls(for:.downloadsDirectory,in:.userDomainMask).first!.appendingPathComponent("Fetchmunk",isDirectory:true)
         destination = UserDefaults.standard.string(forKey:"destination").map { URL(fileURLWithPath:$0) } ?? defaultURL
     }
@@ -107,15 +109,22 @@ import AppKit
     }
     func add() async {
         guard ready && !adding, let client else { return }
-        let url=inputURL.trimmingCharacters(in:.whitespacesAndNewlines)
+        let url=pendingCreation?["url"].string ?? inputURL.trimmingCharacters(in:.whitespacesAndNewlines)
         guard !url.isEmpty else { return }
         adding=true;message=nil
         defer { adding=false }
         do {
-            let result=try await client.request(method:"jobs.create",params:.object(["operation_id":.string(UUID().uuidString),"url":.string(url),"destination":.string(destination.path)]))
+            let params = pendingCreation ?? .object(["operation_id":.string(UUID().uuidString),"url":.string(url),"destination":.string(destination.path)])
+            pendingCreation = params
+            let result=try await client.request(method:"jobs.create",params:params)
+            pendingCreation = nil
             if inputURL.trimmingCharacters(in:.whitespacesAndNewlines)==url { inputURL="" }
             if let id=result["job_id"].string { try await fetch(id) }
-        } catch { message=error.localizedDescription }
+        } catch ClientError.backend(let code) {
+            pendingCreation = nil; message = errorMessage(code)
+        } catch {
+            message = error.localizedDescription + " Ponowne kliknięcie Pobierz sprawdzi poprzednie zgłoszenie."
+        }
     }
     func jobAction(_ method: String, job: Job) async {
         guard ready, !pendingJobs.contains(job.id), let client else { return }

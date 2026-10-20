@@ -1,10 +1,11 @@
 {
   "python": "3.13.16",
-  "python_source": "Homebrew python@3.13 3.13.16; bundled by PyInstaller",
+  "python_source": "Astral python-build-standalone via uv; build 20261013; aarch64-apple-darwin",
   "architecture": "arm64",
   "packages": {
     "gallery-dl": "1.32.17",
     "pyinstaller": "6.22.3"
   },
-  "dependency_integrity": "backend/requirements.lock (SHA-256 hashes)"
+  "dependency_integrity": "backend/requirements.lock (SHA-256 hashes)",
+  "libpython_sha256": "bfdb31bfe403746b67c5813969afb2bbdd116de77aba4dda927ec4f42613a647"
 }

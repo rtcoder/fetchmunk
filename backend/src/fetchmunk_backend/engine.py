@@ -9,7 +9,7 @@ from .models import WorkerRequest, WorkerEvent, WorkerResult
 
 
 def run_download(request: WorkerRequest, emit) -> WorkerResult:
-    from gallery_dl import config, job, output, exception
+    from gallery_dl import config, job, output, exception, util
 
     result = WorkerResult()
     config.clear()
@@ -59,6 +59,9 @@ def run_download(request: WorkerRequest, emit) -> WorkerResult:
             )
 
     reporter = Reporter()
+    original_expand = util.expand_path
+    literal_paths = {str(request.output_dir), str(request.archive_path)}
+    util.expand_path = lambda path: path if path in literal_paths else original_expand(path)
     original_select = output.select
     output.select = lambda: reporter
 
@@ -105,6 +108,7 @@ def run_download(request: WorkerRequest, emit) -> WorkerResult:
     except Exception:
         result.error_code = "engine_error"
     finally:
+        util.expand_path = original_expand
         output.select = original_select
         logger.handlers, logger.propagate = old_handlers, old_propagate
     return result

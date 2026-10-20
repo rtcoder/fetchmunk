@@ -88,3 +88,13 @@ def test_destination_file_reports_permission_error(engine, tmp_path):
     req.output_dir.write_text("not a directory")
     result = engine.run_download(req, lambda e: None)
     assert result.error_code == "permission_denied"
+
+@pytest.mark.parametrize('name', ['literal-$HOME', 'literal-${HOME}', 'żółć ; ~ [test]'])
+def test_destination_and_archive_are_literal(engine, tmp_path, requests_mock, name):
+    from fetchmunk_backend.models import WorkerRequest
+    requests_mock.get('https://example.org/photo.png', content=PNG)
+    req = WorkerRequest('literal', 1, 'https://example.org/photo.png', tmp_path/name/'files', tmp_path/name/'archive.sqlite')
+    result = engine.run_download(req, lambda e: None)
+    assert result.downloaded == 1
+    assert next(req.output_dir.rglob('*.png')).read_bytes() == PNG
+    assert req.archive_path.is_file()

@@ -171,6 +171,8 @@ class JobService:
             effects.append(("queue", p["enabled"]))
             return {"queue_enabled": p["enabled"]}
         if method == "jobs.create":
+            if db.execute("SELECT count(*) FROM jobs").fetchone()[0] >= self.store.MAX_JOBS:
+                raise StoreError("history_limit")
             url = p.get("url")
             try:
                 parsed = urlsplit(url)

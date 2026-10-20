@@ -166,3 +166,13 @@ def test_rejects_invalid_url(service, url):
         }
     )
     assert r["error"]["code"] == "invalid_url"
+
+
+def test_history_limit_is_explicit_and_idempotency_still_works(service, monkeypatch):
+    monkeypatch.setattr(service.store, 'MAX_JOBS', 1)
+    params = dict(operation_id='limit-op', url='https://example.org/a.png', destination=str(service.destination))
+    first = call(service, 'jobs.create', **params)
+    assert call(service, 'jobs.create', **params) == first
+    response = service.handle({'id':'limit', 'method':'jobs.create', 'params':dict(operation_id='other', url='https://example.org/b.png')})
+    assert response['error']['code'] == 'history_limit'
+    assert len(service.store.all_jobs()) == 1

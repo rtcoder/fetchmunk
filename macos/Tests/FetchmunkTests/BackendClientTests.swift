@@ -63,4 +63,34 @@ for line in sys.stdin:
         catch ClientError.disconnected {} catch { XCTFail("Unexpected \(error)") }
         try await client.shutdown()
     }
+    func testShutdownDeadlineIncludesRequestTimeout() async throws {
+        let url = try fixture(hello+"time.sleep(30)\n")
+        let client = BackendClient(requestSeconds:2, shutdownSeconds:0.2)
+        try await client.start(executableURL:url)
+        let started = Date()
+        try await client.shutdown()
+        XCTAssertLessThan(Date().timeIntervalSince(started), 1.5)
+    }
+    @MainActor func testManualRetryAfterTwoTimeoutsPreservesCreation() async throws {
+        let url = try fixture(hello+"""
+first=None
+count=0
+for line in sys.stdin:
+ r=json.loads(line)
+ if r['method']=='app.shutdown':break
+ count+=1
+ if first is None:first=r['params']['operation_id']
+ if count<=2:continue
+ print(json.dumps({'protocol':1,'type':'response','id':r['id'],'error':{'code':'invalid_url' if first==r['params']['operation_id'] else 'permission_denied'}}),flush=True)
+
+""")
+        let client=BackendClient(requestSeconds:0.05)
+        try await client.start(executableURL:url)
+        let model=AppModel(client:client);model.ready=true;model.inputURL="https://example.org/a.png"
+        await model.add()
+        XCTAssertFalse(model.adding)
+        await model.add()
+        XCTAssertEqual(model.message,errorMessage("invalid_url"))
+        try await client.shutdown()
+    }
 }

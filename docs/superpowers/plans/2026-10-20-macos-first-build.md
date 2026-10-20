@@ -310,3 +310,7 @@ handshake, prawdziwego pobrania kontrolnego i zakończenia procesów.
   etapem, a nie pominięte w deklaracji gotowego MVP.
 - Minimalny system i wydajność wymagają pomiaru; lokalny toolchain nie stanowi
   dowodu zgodności.
+
+## Stan wykonania 2026-10-20
+
+Lokalna aplikacja i DMG zostały zbudowane i uruchomione. Oryginalne checklisty powyżej pozostają zapisem planu; rzeczywiste wyniki, odstępstwa oraz niewykonane testy manualne znajdują się w [raporcie weryfikacji](../../verification/first-build.md). Nie wszystkie kontrole jakości publicznego wydania zostały wykonane.

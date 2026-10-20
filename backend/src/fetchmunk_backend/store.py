@@ -17,6 +17,7 @@ def timestamp():
 
 
 class JobStore:
+    MAX_JOBS = 1000
     @classmethod
     def open(cls, data_dir: Path):
         data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -35,6 +36,8 @@ CREATE TABLE IF NOT EXISTS operations (id TEXT PRIMARY KEY, request TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS attempts (job_id TEXT, attempt INTEGER, data TEXT, PRIMARY KEY(job_id,attempt));
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 PRAGMA user_version=1;""")
+            if db.execute("SELECT count(*) FROM jobs").fetchone()[0] > cls.MAX_JOBS:
+                raise StoreError("history_limit")
             os.chmod(data_dir / "state.sqlite", 0o600)
             result = cls()
             result.db = db

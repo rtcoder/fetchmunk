@@ -15,6 +15,7 @@ cp packaging/Info.plist "$APP/Contents/Info.plist"
 ditto dist/FetchmunkBackend.app "$APP/Contents/Helpers/FetchmunkBackend.app"
 swift packaging/icon.swift build/AppIcon.iconset
 iconutil -c icns build/AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
+python3 scripts/check_macos_target.py "$APP"
 # Sign actual Mach-O files, then nested frameworks, then the outer bundle.
 python3 - "$APP" <<'PY'
 from pathlib import Path

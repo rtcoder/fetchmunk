@@ -13,9 +13,10 @@ actor BackendClient {
     private var timers: [String: Task<Void, Never>] = [:]
     private let handshakeSeconds: Double
     private let requestSeconds: Double
+    private let shutdownSeconds: Double
     private var connected = false
-    init(handshakeSeconds: Double = 10, requestSeconds: Double = 5) {
-        self.handshakeSeconds = handshakeSeconds; self.requestSeconds = requestSeconds
+    init(handshakeSeconds: Double = 10, requestSeconds: Double = 5, shutdownSeconds: Double = 10) {
+        self.handshakeSeconds = handshakeSeconds; self.requestSeconds = requestSeconds; self.shutdownSeconds = shutdownSeconds
         var c: AsyncStream<BackendEvent>.Continuation!
         events = AsyncStream(bufferingPolicy: .bufferingNewest(1024)) { c = $0 }; continuation = c
     }
@@ -101,9 +102,10 @@ actor BackendClient {
         continuation.yield(.object(["event":.string("connection.closed")]))
     }
     func shutdown() async throws {
-        if connected { _ = try? await request(method:"app.shutdown",params:.object(["operation_id":.string(UUID().uuidString),"reason":.string("quit")])) }
         guard let p = process else { return }
-        let killer = Task.detached { try? await Task.sleep(nanoseconds:10_000_000_000); if !Task.isCancelled && p.isRunning { kill(p.processIdentifier,SIGKILL) } }
+        let seconds = shutdownSeconds
+        let killer = Task.detached { try? await Task.sleep(nanoseconds:UInt64(seconds * 1_000_000_000)); if !Task.isCancelled && p.isRunning { kill(p.processIdentifier,SIGKILL) } }
+        if connected { _ = try? await request(method:"app.shutdown",params:.object(["operation_id":.string(UUID().uuidString),"reason":.string("quit")])) }
         await Task.detached { p.waitUntilExit() }.value
         killer.cancel(); process = nil; continuation.finish()
     }
