@@ -10,3 +10,5 @@ pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='fetchmunk-backend',
           console=True, target_arch='arm64')
 coll = COLLECT(exe, a.binaries, a.datas, name='fetchmunk-backend')
+
+app = BUNDLE(coll, name='FetchmunkBackend.app', bundle_identifier='dev.rtcoder.fetchmunk.backend', info_plist={'LSBackgroundOnly': True})

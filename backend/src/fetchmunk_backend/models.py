@@ -1,6 +1,7 @@
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
+
 @dataclass
 class WorkerRequest:
     job_id: str
@@ -9,10 +10,12 @@ class WorkerRequest:
     output_dir: Path
     archive_path: Path
 
+
 @dataclass
 class WorkerEvent:
     kind: str
     data: dict
+
 
 @dataclass
 class WorkerResult:
