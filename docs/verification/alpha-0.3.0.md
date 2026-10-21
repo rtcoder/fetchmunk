@@ -28,3 +28,11 @@ and model/parser tests do not substitute for visual/accessibility acceptance.
 Distribution remains ad hoc signed, without Developer ID/notarization. Licenses
 are bundled from distributions; complete transitive/native audit is still planned.
 Windows/Linux, updater and authentication remain roadmap work.
+
+GitHub Actions run 39672561094: SUCCESS on source commit f8f5763, including
+Python/Swift/metadata tests, app/DMG build, both packaged smoke tests and artifact upload.
+https://github.com/rtcoder/fetchmunk/actions/runs/39672561094
+
+Final local folder: dist/Fetchmunk-0.3.0 (app, DMG, SHA256SUMS.txt).
+Finder AX verified all three files after source commit push.
+DMG SHA-256: a447fafd9ae0905a9ad9dabb671cb1884b99f8fe66ee9c00abb970b6b91cb0de.
