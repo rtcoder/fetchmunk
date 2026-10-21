@@ -1,6 +1,6 @@
 """Persistent coordinator. All state transitions are serialized under one lock."""
 
-import json, os, queue, sys, threading, time, uuid
+import json, os, queue, sqlite3, sys, threading, time, uuid
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from . import __version__
@@ -47,6 +47,7 @@ class JobService:
         job["revision"] += 1
         job["updated_at"] = timestamp()
         self.store.save_job(job)
+        self.snapshots.maintain(self.store)
         self.event(
             "job.changed", {"job_id": job["job_id"], "revision": job["revision"]}
         )
@@ -67,20 +68,25 @@ class JobService:
                         params.get("default_destination")
                     )
                     self.store = JobStore.open(data)
-                    self.queue_enabled = not bool(self.store.all_jobs())
+                    self.queue_enabled = not self.store.has_jobs()
                     self.store.recover_interrupted()
-                    result = {"schema_version": 1, "queue_enabled": self.queue_enabled}
+                    result = {"schema_version": 2, "queue_enabled": self.queue_enabled}
                 elif not self.store or self.closed or self.stopping:
                     raise StoreError("invalid_state")
                 elif method == "jobs.get":
                     result = self.store.get_job(params.get("job_id"))
+                elif method == "jobs.summary":
+                    result = self.store.summary()
+                    result["current_job"] = self.store.get_job(self.active) if self.active else None
+                    result["queue_enabled"] = self.queue_enabled
+                    result["at_seq"] = self.seq
                 elif method == "jobs.snapshot":
                     limit = params.get("limit", 100)
                     result = (
-                        self.snapshots.page(params["cursor"], limit)
+                        self.snapshots.page(params["cursor"], limit, params.get("filter"))
                         if params.get("cursor")
                         else self.snapshots.create(
-                            self.store.all_jobs(), self.seq, limit
+                            self.store, self.seq, limit, params.get("filter", "all"), params.get("anchor")
                         )
                     )
                 elif method.startswith("auth."):
@@ -136,6 +142,9 @@ class JobService:
                     "message_key": "error.invalid_params",
                     "retryable": False,
                 }
+            except sqlite3.DatabaseError as exc:
+                code = "disk_full" if getattr(exc, "sqlite_errorcode", None) == sqlite3.SQLITE_FULL else "database_error"
+                response["error"] = {"code": code, "message_key": "error."+code, "retryable": False}
             except OSError as exc:
                 code = "disk_full" if exc.errno == 28 else "permission_denied"
                 response["error"] = {
@@ -144,6 +153,8 @@ class JobService:
                     "retryable": True,
                 }
             self.pump()
+            if self.store:
+                self.snapshots.maintain(self.store)
             return response
 
     @staticmethod
@@ -171,8 +182,6 @@ class JobService:
             effects.append(("queue", p["enabled"]))
             return {"queue_enabled": p["enabled"]}
         if method == "jobs.create":
-            if db.execute("SELECT count(*) FROM jobs").fetchone()[0] >= self.store.MAX_JOBS:
-                raise StoreError("history_limit")
             url = p.get("url")
             try:
                 parsed = urlsplit(url)
@@ -259,9 +268,7 @@ class JobService:
             or self.closed
         ):
             return
-        for job in self.store.all_jobs():
-            if job["state"] != "queued":
-                continue
+        while (job := self.store.next_queued()) is not None:
             self.active = job["job_id"]
             job["state"] = "extracting"
             self.changed(job)
@@ -367,6 +374,7 @@ class JobService:
         if hasattr(self.supervisor, "join"):
             self.supervisor.join(6)
         with self.lock:
+            self.snapshots.close()
             if self.store:
                 self.store.recover_interrupted()
                 self.store.close()
@@ -443,7 +451,7 @@ def serve():
             "session_id": service.session_id,
             "backend_version": __version__,
             "engine_version": engine_version,
-            "capabilities": ["jobs"],
+            "capabilities": ["jobs", "paged_jobs"],
         }
     )
     try:

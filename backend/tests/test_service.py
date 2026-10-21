@@ -168,11 +168,17 @@ def test_rejects_invalid_url(service, url):
     assert r["error"]["code"] == "invalid_url"
 
 
-def test_history_limit_is_explicit_and_idempotency_still_works(service, monkeypatch):
-    monkeypatch.setattr(service.store, 'MAX_JOBS', 1)
-    params = dict(operation_id='limit-op', url='https://example.org/a.png', destination=str(service.destination))
-    first = call(service, 'jobs.create', **params)
-    assert call(service, 'jobs.create', **params) == first
-    response = service.handle({'id':'limit', 'method':'jobs.create', 'params':dict(operation_id='other', url='https://example.org/b.png')})
-    assert response['error']['code'] == 'history_limit'
-    assert len(service.store.all_jobs()) == 1
+def test_large_history_summary_and_paging_do_not_load_all_jobs(service, monkeypatch):
+    call(service, 'queue.set_enabled', enabled=False)
+    with service.store.db:
+        for i in range(1001):
+            service.store.save_job(dict(job_id=str(i), state='completed', revision=1, created_at='same'),service.store.db)
+    monkeypatch.setattr(service.store,'all_jobs',lambda:pytest.fail('full history read'))
+    params=dict(operation_id='large',url='https://example.org/a.png',destination=str(service.destination))
+    first=call(service,'jobs.create',**params)
+    assert call(service,'jobs.create',**params)==first
+    summary=call(service,'jobs.summary')
+    assert summary['total']==1002 and summary['history']==1001 and summary['active']==1
+    assert len(call(service,'jobs.snapshot',filter='history')['jobs'])==100
+    call(service,'queue.set_enabled',enabled=True)
+    assert call(service,'jobs.summary')['current_job']['job_id']==first['job_id']
