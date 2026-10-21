@@ -23,7 +23,7 @@ struct MainView: View {
                     Text("Lokalnie. Bez konta.").font(.caption2).foregroundStyle(.tertiary)
                     Text("Wersja rozwojowa · 0.1.0").font(.caption2).foregroundStyle(.tertiary)
                 }.padding(.bottom,18)
-            }.padding(.horizontal,18).frame(maxHeight:.infinity).navigationSplitViewColumnWidth(min:190,ideal:210,max:240)
+            }.padding(.horizontal,18).frame(maxHeight:.infinity).navigationSplitViewColumnWidth(min:240,ideal:250,max:300)
         } detail: {
             VStack(alignment:.leading,spacing:0) {
                 HStack(alignment:.firstTextBaseline) {
@@ -107,7 +107,7 @@ struct MainView: View {
         Button { Task { await model.select(tag) } } label: {
             HStack(spacing:10) {
                 Image(systemName:icon).frame(width:19)
-                Text(title);Spacer();Text("\(count)").font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                Text(title).lineLimit(1);Spacer(minLength:4);Text("\(count)").font(.caption).monospacedDigit().fixedSize().foregroundStyle(.secondary)
             }.font(.system(size:13,weight:model.selection==tag ? .semibold : .regular)).padding(.horizontal,11).padding(.vertical,10)
                 .background(model.selection==tag ? fetchmunkAccent.opacity(0.12) : .clear,in:RoundedRectangle(cornerRadius:8))
                 .foregroundStyle(model.selection==tag ? fetchmunkAccent : .primary)

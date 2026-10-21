@@ -73,13 +73,33 @@ Wcześniejszy build odrzuci schema2; powrót do niego wymaga odtworzenia kopii
 przy zamkniętej aplikacji. Kopia nie zawiera późniejszych operacji.
 Nie zmieniamy katalogów pobranych plików.
 
-Ręczny test natywnego GUI na dużej bazie **nie został wykonany**:
-automatyczna kontrola uprawnień zablokowała uruchomienie samodzielnie
-skompilowanego „Fetchmunk History QA.app” jako niezweryfikowanego programu.
-Przygotowany host używa prywatnej bazy 100 000 fikcyjnych rekordów w build.
-Wysłano pytanie o zgodę; bez odpowiedzi nie ponawiamy startu ani nie
-uruchamiamy go inną drogą. Testy modelu Swift i zamrożonego backendu
-przechodzą, lecz nie zastępują wizualnego sprawdzenia przycisków i pinowania.
+## Test natywnego GUI na dużej bazie
+
+Po zgodzie użytkownika uruchomiono „Fetchmunk History QA.app”, host z tymi
+samymi źródłami SwiftUI i finalnym backendem z `.app`, lecz z oddzielną bazą
+100 000 fikcyjnych zadań i katalogiem pobrań w build. Nie używano danych użytkownika.
+
+Sprawdzono przez natywne sterowanie interfejsem i odczyt accessibility:
+
+- globalne liczniki 100 000, pustą zakładkę kolejki i przełączanie filtrów;
+- Starsze: 99999.png → 99899.png; Nowsze: powrót do 99999.png;
+- komunikat i odtworzenie widoku po wygaśnięciu migawki;
+- dodanie kontrolowanego transferu HTTP z 127.0.0.1, uruchomienie kolejki i postęp;
+- kartę „Teraz pobierane” widoczną w Historii także po przejściu na starszą stronę;
+- anulowanie z przypiętej karty: aktywne 1→0, historia 100 000→100 001, status „Anulowano”;
+- zamknięcie hosta i zakończenie jego backendu.
+
+Transfer używał syntetycznych bajtów z lokalnego serwera do testu postępu
+i anulowania, nie poprawności dekodowania obrazu. Serwer zakończono po teście.
+Zrzut ekranu ujawnił zawijanie „Wszystkie” przy sześciocyfrowym liczniku;
+poszerzono panel, zachowano etykietę w jednym wierszu i miejsce na licznik.
+Przed poprawką wykonano zrzut ekranu i powyższe testy funkcjonalne.
+Po przebudowie host uruchomił się, ale powtarzający się błąd ScreenCaptureKit
+-3811 narzędzia QA uniemożliwił ponowne obejrzenie układu, także po resecie
+sesji sterowania. Wygląd po poprawce pozostaje do potwierdzenia.
+Build `.app` i DMG po zmianie: PASS, codesign i deployment target: PASS;
+ponowny smoke test `.app`: PASS, hello 0,075 s. Test DMG opisany wyżej
+dotyczy wersji sprzed tej wyłącznie wizualnej zmiany.
 
 Nadal niewykonane: rzeczywisty macOS13, czysta maszyna, VoiceOver i pomiar
 GUI podczas transferu. Podpis ad hoc pozostaje lokalny; brak notaryzacji,
