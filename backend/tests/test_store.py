@@ -15,7 +15,7 @@ def test_operation_survives_restart_and_conflicts(tmp_path):
 
     def mutate(db):
         db.execute(
-            "INSERT INTO jobs VALUES (?,?)",
+            "INSERT INTO jobs(id,data) VALUES (?,?)",
             ("j", json.dumps({"job_id": "j", "state": "queued"})),
         )
         return {"job_id": "j"}
@@ -38,7 +38,7 @@ def test_transaction_rollback_and_exclusive_lock(tmp_path):
         s.JobStore.open(tmp_path)
 
     def broken(db):
-        db.execute("INSERT INTO jobs VALUES ('bad','{}')")
+        db.execute("INSERT INTO jobs(id,data) VALUES ('bad','{}')")
         raise ValueError("failure")
 
     with pytest.raises(ValueError):
