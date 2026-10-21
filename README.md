@@ -27,7 +27,7 @@ Existing schema-1 databases are backed up to `state-before-v2.sqlite` in the app
 - `dist/Fetchmunk.app`
 - `dist/Fetchmunk-local-arm64.dmg` (drag the application to Applications)
 
-Both are generated, ignored by Git and signed ad hoc. The target is macOS 13+, but actual execution has only been verified on macOS 27.0.1. Do not treat the local DMG as a notarized public installer.
+Both are generated, ignored by Git and signed ad hoc. The target is macOS 13+. Native GUI execution has been checked on macOS 27.0.1; packaged backend smoke tests also pass on the macOS 15 arm64 Actions runner. macOS 13 itself remains unverified. Do not treat the local DMG as a notarized public installer.
 
 ## Build and test — developers only
 
@@ -71,6 +71,9 @@ The existing `v0.1.0` tag predates the workflow; it will not trigger a build
 retroactively. Use a manual run to test the workflow without moving that tag.
 
 ## Documentation
+
+- [Alpha 0.2.0: verification](docs/verification/alpha-0.2.0.md)
+- [50-task plan and completion](docs/superpowers/plans/2026-10-21-next-50.md)
 
 - [Installation and release checklist](docs/release.md)
 - [History scaling: verification](docs/verification/history-scaling.md)
