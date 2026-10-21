@@ -9,18 +9,23 @@ import time
 import uuid
 from dataclasses import dataclass
 from .wire import MAX_FRAME
+from .store import FAILED
+
+
+_UNSET = object()
 
 
 class SnapshotError(ValueError):
     pass
 
 
-@dataclass
+@dataclass(frozen=True)
 class Snapshot:
     db: sqlite3.Connection
     started: float
     seq: int
     filter: str
+    query: str
 
 
 class SnapshotStore:
@@ -31,17 +36,19 @@ class SnapshotStore:
         self.secret = secrets.token_bytes(32)
 
     @staticmethod
-    def validate(limit, filter=None, anchor=None):
+    def validate(limit, filter=None, anchor=None, query=_UNSET):
         if type(limit) is not int or not 1 <= limit <= 100:
             raise SnapshotError('invalid_params')
-        if filter is not None and filter not in ('all','active','history'):
+        if filter is not None and filter not in ('all','active','history','completed','failed','cancelled'):
+            raise SnapshotError('invalid_params')
+        if query is not _UNSET and (not isinstance(query, str) or len(query)>200 or '\0' in query):
             raise SnapshotError('invalid_params')
         if anchor is not None and (not isinstance(anchor,list) or len(anchor)!=2 or
                                    not all(isinstance(v,str) and len(v)<=128 for v in anchor)):
             raise SnapshotError('invalid_params')
 
-    def create(self, store, at_seq, limit=100, filter='all', anchor=None):
-        self.validate(limit,filter,anchor)
+    def create(self, store, at_seq, limit=100, filter='all', anchor=None, query=''):
+        self.validate(limit,filter,anchor,query)
         self.maintain(store)
         if len(self.snapshots)>=4:
             self._drop(next(iter(self.snapshots)))
@@ -49,12 +56,13 @@ class SnapshotStore:
                            isolation_level=None,check_same_thread=False)
         sid=str(uuid.uuid4())
         try:
+            db.create_function('unicode_casefold', 1, lambda value: value.casefold() if isinstance(value,str) else '', deterministic=True)
             db.execute('PRAGMA query_only=ON')
             db.execute('PRAGMA cache_size=-1024')
             db.execute('BEGIN')
             # Pin the read version now, while the service holds its mutation lock.
             db.execute('SELECT id FROM jobs LIMIT 1').fetchone()
-            self.snapshots[sid]=Snapshot(db,self.clock(),at_seq,filter)
+            self.snapshots[sid]=Snapshot(db,self.clock(),at_seq,filter,query)
             return self._page(sid,'at',anchor,limit)
         except Exception:
             if sid in self.snapshots:self._drop(sid)
@@ -66,8 +74,8 @@ class SnapshotStore:
         signature=hmac.digest(self.secret,payload,hashlib.sha256)
         return base64.urlsafe_b64encode(signature+payload).decode()
 
-    def page(self,cursor,limit=100,filter=None):
-        self.validate(limit,filter)
+    def page(self,cursor,limit=100,filter=None,query=_UNSET):
+        self.validate(limit,filter,query=query)
         self._expire()
         try:
             if not isinstance(cursor,str) or len(cursor)>2048:raise ValueError()
@@ -82,6 +90,7 @@ class SnapshotStore:
         snap=self.snapshots.get(sid)
         if snap is None:raise SnapshotError('snapshot_expired')
         if filter is not None and filter!=snap.filter:raise SnapshotError('invalid_params')
+        if query is not _UNSET and query!=snap.query:raise SnapshotError('invalid_params')
         return self._page(sid,direction,anchor,limit)
 
     def _drop(self,sid):
@@ -107,7 +116,17 @@ class SnapshotStore:
     @staticmethod
     def predicate(snap,direction,anchor):
         clauses=[];args=[]
-        if snap.filter!='all':clauses.append('bucket=?');args.append(snap.filter)
+        if snap.filter in ('active','history'):
+            clauses.append('bucket=?');args.append(snap.filter)
+        elif snap.filter in ('completed','cancelled'):
+            clauses.append('state=?');args.append(snap.filter)
+        elif snap.filter=='failed':
+            clauses.append('state IN (?,?,?,?)');args.extend(FAILED)
+        if snap.query:
+            # Literal Unicode substring: SQL wildcards have no special meaning.
+            # SQLite scans candidate rows, retaining only the bounded result page.
+            clauses.append("(instr(unicode_casefold(json_extract(data,'$.display_url')),?)>0 OR instr(unicode_casefold(json_extract(data,'$.output_dir')),?)>0)")
+            args.extend((snap.query.casefold(),snap.query.casefold()))
         if anchor is not None:
             comparison={'newer':'>','older':'<','at':'<='}[direction]
             clauses.append(f'(created_at,id){comparison}(?,?)');args.extend(anchor)
@@ -117,7 +136,10 @@ class SnapshotStore:
         snap=self.snapshots[sid]
         where,args=self.predicate(snap,direction,anchor)
         order='ASC' if direction=='newer' else 'DESC'
-        rows=snap.db.execute(f'SELECT data,created_at,id FROM jobs{where} ORDER BY created_at {order},id {order} LIMIT ?',(*args,limit))
+        # State/queue index cannot provide chronological order. An ordered scan
+        # avoids sorting all matching history into a temporary B-tree.
+        index='jobs_bucket_created' if snap.filter in ('active','history') else 'jobs_created'
+        rows=snap.db.execute(f'SELECT data,created_at,id FROM jobs INDEXED BY {index}{where} ORDER BY created_at {order},id {order} LIMIT ?',(*args,limit))
         items=[];keys=[];size=1024
         for raw,date,jid in rows:
             item=json.loads(raw)

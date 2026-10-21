@@ -10,6 +10,7 @@ from pathlib import Path
 
 ACTIVE = ('extracting', 'downloading', 'waiting', 'cancelling')
 PENDING = (*ACTIVE, 'queued', 'needs_auth')
+FAILED = ('failed', 'partial', 'interrupted', 'needs_auth')
 
 
 class StoreError(ValueError):
@@ -169,7 +170,8 @@ ON CONFLICT(id) DO UPDATE SET data=excluded.data,state=excluded.state,created_at
     def summary(self):
         counts = dict(self.db.execute('SELECT state,n FROM state_counts'))
         total, active = sum(counts.values()), sum(counts.get(s,0) for s in PENDING)
-        return dict(total=total, active=active, history=total-active, completed=counts.get('completed',0))
+        return dict(total=total, active=active, history=total-active, completed=counts.get('completed',0),
+                    failed=sum(counts.get(s,0) for s in FAILED), cancelled=counts.get('cancelled',0))
 
     def all_jobs(self):
         """Diagnostic/test helper; interactive operations must use indexed reads."""

@@ -53,7 +53,7 @@ def test_fifo_survives_updates_and_retry_goes_to_tail(tmp_path):
         a.update(state='queued',attempt=2);s.save_job(a)
         assert s.next_queued()['job_id']=='b'
         b['state']='completed';s.save_job(b)
-        assert s.summary()==dict(total=2,active=1,history=1,completed=1)
+        assert s.summary()==dict(total=2,active=1,history=1,completed=1,failed=0,cancelled=0)
         with pytest.raises(ValueError):
             with s.db:
                 s.save_job(job('c','queued'),s.db)

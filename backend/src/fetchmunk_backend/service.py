@@ -83,10 +83,12 @@ class JobService:
                 elif method == "jobs.snapshot":
                     limit = params.get("limit", 100)
                     result = (
-                        self.snapshots.page(params["cursor"], limit, params.get("filter"))
+                        self.snapshots.page(params["cursor"], limit, params.get("filter"),
+                                            **({"query": params["query"]} if "query" in params else {}))
                         if params.get("cursor")
                         else self.snapshots.create(
-                            self.store, self.seq, limit, params.get("filter", "all"), params.get("anchor")
+                            self.store, self.seq, limit, params.get("filter", "all"), params.get("anchor"),
+                            params.get("query", "")
                         )
                     )
                 elif method.startswith("auth."):
@@ -484,7 +486,7 @@ def serve():
             "session_id": service.session_id,
             "backend_version": __version__,
             "engine_version": engine_version,
-            "capabilities": ["jobs", "paged_jobs"],
+            "capabilities": ["jobs", "paged_jobs", "history_search"],
         }
     )
     try:

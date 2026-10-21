@@ -1,6 +1,6 @@
 # Fetchmunk — projekt protokołu GUI ↔ backend v1
 
-Status: v1 jest zaimplementowana dla zadań; rozszerzenie `paged_jobs` dodano 2026-10-21. Metody `auth.*` pozostają planowane i zwracają `dependency_unsupported`.
+Status: v1 jest zaimplementowana dla zadań; rozszerzenia `paged_jobs` i `history_search` dodano 2026-10-21. Metody `auth.*` pozostają planowane i zwracają `dependency_unsupported`.
 Powiązany dokument: [MVP i architektura](mvp.md).
 
 ## Transport i wersjonowanie
@@ -28,7 +28,7 @@ Brak znanej wartości oznacza `null`, nigdy umowne zero lub `-1`.
 Pierwszą wiadomością jest `hello` backendu:
 
 ```json
-{"protocol":1,"type":"hello","session_id":"session-1","backend_version":"0.1.0","engine_version":"pinned-version","capabilities":["jobs","browser_auth"]}
+{"protocol":1,"type":"hello","session_id":"session-1","backend_version":"0.1.0","engine_version":"pinned-version","capabilities":["jobs","paged_jobs","history_search"]}
 ```
 
 Wartości wersji w przykładzie są ilustracyjne, a nie wybranymi wydaniami.
@@ -69,8 +69,8 @@ nie sukces pobierania ani potwierdzenie dostępności zdalnego źródła.
 | `session.initialize` | `data_dir`, `default_destination` | `schema_version`, `queue_enabled` |
 | `jobs.create` | `url`, `destination` | `job_id`, `revision` |
 | `jobs.get` | `job_id` | pełne zadanie |
-| `jobs.snapshot` | opcjonalne `cursor`, `limit` 1–100, `filter`, `anchor` | `snapshot_id`, `at_seq`, `jobs`, `next_cursor`, `previous_cursor` |
-| `jobs.summary` | brak | `total`, `active`, `history`, `completed`, `current_job`, `queue_enabled`, `at_seq` |
+| `jobs.snapshot` | opcjonalne `cursor`, `limit` 1–100, `filter`, `anchor`, `query` | `snapshot_id`, `at_seq`, `jobs`, `next_cursor`, `previous_cursor` |
+| `jobs.summary` | brak | `total`, `active`, `history`, `completed`, `failed`, `cancelled`, `current_job`, `queue_enabled`, `at_seq` |
 | `jobs.cancel` | `job_id` | aktualne pełne zadanie |
 | `jobs.retry` | `job_id` | aktualne pełne zadanie z nową próbą |
 | `queue.set_enabled` | `enabled` | `queue_enabled` |
@@ -248,3 +248,44 @@ Błąd zapisu/checkpointu zatrzymuje kolejkę i może wysłać `queue.changed`
 z `queue_enabled: false` oraz `error.code`. Zatwierdzone wcześniej jobs.create
 zachowuje wynik i operation_id; błąd późniejszego uruchomienia zadania nie
 cofa zapisanego zgłoszenia. Migracja schema1→2 waliduje rekordy i tworzy backup.
+
+
+## Rozszerzenie history_search (2026-10-21)
+
+Backend ogłasza capability `history_search`. `jobs.snapshot` przyjmuje także:
+
+- `filter: "completed"`: wyłącznie stan completed;
+- `filter: "failed"`: stany failed, partial, interrupted i needs_auth;
+- `filter: "cancelled"`: wyłącznie stan cancelled;
+- `query`: opcjonalny string, maksymalnie 200 znaków Unicode, bez NUL.
+  Wartość null i inne typy dają `invalid_params`. Brak query przy tworzeniu
+  migawki oznacza pusty string, czyli brak ograniczenia tekstowego.
+
+Wyszukiwanie sprawdza dosłowny podciąg w `display_url` lub `output_dir`,
+bez rozróżniania wielkości liter (Unicode casefold, np. Straße ↔ STRASSE).
+Nie przeszukuje pełnego `url`, a więc query/fragment URL pozostają poza
+zakresem wyszukiwania. `%`, `_`, apostrof i backslash są zwykłymi znakami.
+Tekst nie jest przycinany, tokenizowany ani normalizowany do NFC/NFD.
+Filtr stanu i zapytanie tekstowe są łączone warunkiem AND.
+
+Migawka zachowuje filtr oraz oryginalny query przez cały okres życia.
+Podpisany cursor wskazuje tę niezmienną migawkę. Przy kontynuacji można
+pominąć filter/query (zgodność ze starszym klientem); podane wartości muszą
+być dokładnie zgodne z migawką, inaczej backend zwraca `invalid_params`.
+Różna wielkość liter w query również jest niedopasowaniem, mimo identycznych
+wyników wyszukiwania. Nowy query wymaga nowej migawki. Sortowanie, anchor,
+limity stron i odczyt spójny podczas zmian bazy działają jak dla paged_jobs.
+
+`jobs.summary` dodaje globalne `failed` i `cancelled`, z tymi samymi zbiorami
+stanów co nowe filtry. Liczniki nigdy nie zależą od bieżącego query/filtra.
+`needs_auth` należy jednocześnie do active i failed: te kategorie nie tworzą
+rozłącznego podziału; total nadal równa się active + history.
+
+Wyszukiwanie działa w SQLite po rekordach kandydujących, bez kopiowania
+historii do pamięci Pythona. Strony active/history używają indeksu bucket/created_at; pozostałe strony
+wymuszają indeks created_at/id i filtrują stany podczas uporządkowanego
+skanowania, bez tymczasowego sortowania historii. Sprawdzenie istnienia
+następnej strony może użyć indeksu state. Dowolny podciąg wymaga skanowania
+pól JSON kandydatów i może
+być wolniejszy dla dużej historii. RAM stron i cache odczytu pozostaje
+ograniczony. Nie zmienia to schematu bazy (wersja 2).

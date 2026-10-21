@@ -2,6 +2,7 @@ import SwiftUI
 struct JobRow: View {
     let job: Job
     @ObservedObject var model: AppModel
+    @State private var showingDetails = false
     var color: Color { job.state=="completed" ? .green : ["failed","partial","needs_auth"].contains(job.state) ? fetchmunkAccent : .secondary }
     var body: some View {
         HStack(alignment:.top,spacing:14) {
@@ -14,8 +15,8 @@ struct JobRow: View {
                 }
                 Text(job.host).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 if job.isActive {
-                    if let f=job.current_file, let total=f.bytes_total, total>0 { ProgressView(value:Double(f.bytes_done),total:Double(total)).tint(fetchmunkAccent) }
-                    else { ProgressView().controlSize(.small).frame(maxWidth:.infinity,alignment:.leading) }
+                    if let file = job.current_file { FileProgressView(file: file) }
+                    else { ProgressView().controlSize(.small).frame(maxWidth:.infinity,alignment:.leading).accessibilityLabel("Oczekiwanie na postęp pliku") }
                 }
                 HStack {
                     Text("Pobrano \(job.downloaded) · pominięto \(job.skipped)" + (job.failed_files>0 ? " · błędy \(job.failed_files)" : ""))
@@ -23,11 +24,29 @@ struct JobRow: View {
                     Spacer()
                     if job.canCancel { Button("Anuluj") { Task { await model.jobAction("jobs.cancel",job:job) } }.disabled(job.state=="cancelling") }
                     if job.canRetry { Button("Ponów") { Task { await model.jobAction("jobs.retry",job:job) } } }
-                    if job.downloaded+job.skipped>0 { Button { model.reveal(job) } label: { Image(systemName:"folder") }.help("Pokaż pliki").accessibilityLabel("Pokaż pliki") }
+                    if job.downloaded > 0 || job.skipped > 0 { Button { model.reveal(job) } label: { Image(systemName:"folder") }.help("Pokaż pliki").accessibilityLabel("Pokaż pliki") }
                 }.buttonStyle(.borderless).font(.caption).disabled(!model.ready || model.pendingJobs.contains(job.id))
+                Button("Szczegóły") { showingDetails = true }
+                    .buttonStyle(.borderless).font(.caption)
+                    .accessibilityLabel("Pokaż szczegóły zadania")
                 if let error=job.error { Text(errorMessage(error.code)).font(.caption).foregroundStyle(fetchmunkAccent).textSelection(.enabled) }
             }
         }.padding(16).background(.background,in:RoundedRectangle(cornerRadius:12))
+            .sheet(isPresented: $showingDetails) { JobDetailsView(job: job) }
+            .contextMenu {
+                Button("Szczegóły zadania") { showingDetails = true }
+                if job.canCancel {
+                    Button("Anuluj") { Task { await model.jobAction("jobs.cancel", job: job) } }
+                        .disabled(!model.ready || model.pendingJobs.contains(job.id) || job.state == "cancelling")
+                }
+                if job.canRetry {
+                    Button("Ponów") { Task { await model.jobAction("jobs.retry", job: job) } }
+                        .disabled(!model.ready || model.pendingJobs.contains(job.id))
+                }
+                if job.downloaded > 0 || job.skipped > 0 {
+                    Button("Pokaż pliki") { model.reveal(job) }
+                }
+            }
             .overlay(RoundedRectangle(cornerRadius:12).stroke(Color.primary.opacity(0.06),lineWidth:1))
     }
 }

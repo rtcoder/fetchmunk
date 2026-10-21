@@ -15,15 +15,19 @@ struct MainView: View {
                     sidebarItem("Wszystkie",icon:"tray.full",tag:"all",count:model.totalCount)
                     sidebarItem("W kolejce",icon:"arrow.down.circle",tag:"active",count:model.activeCount)
                     sidebarItem("Historia",icon:"clock",tag:"history",count:model.historyCount)
+                    Divider().padding(.vertical,4)
+                    sidebarItem("Ukończone",icon:"checkmark.circle",tag:"completed",count:model.completedCount)
+                    sidebarItem("Do sprawdzenia",icon:"exclamationmark.circle",tag:"failed",count:model.failedCount)
+                    sidebarItem("Anulowane",icon:"xmark.circle",tag:"cancelled",count:model.cancelledCount)
                 }
                 Spacer()
                 VStack(alignment:.leading,spacing:8) {
                     Label(model.ready ? "Silnik gotowy" : model.connecting ? "Uruchamianie silnika…" : "Silnik niedostępny",systemImage:model.ready ? "checkmark.circle.fill" : "circle.dotted")
                         .font(.caption).foregroundStyle(model.ready ? Color.secondary : fetchmunkAccent)
                     Text("Lokalnie. Bez konta.").font(.caption2).foregroundStyle(.tertiary)
-                    Text("Wersja rozwojowa · 0.1.0").font(.caption2).foregroundStyle(.tertiary)
+                    Text("Wersja rozwojowa · \(AppInfo.version)").font(.caption2).foregroundStyle(.tertiary)
                 }.padding(.bottom,18)
-            }.padding(.horizontal,18).frame(maxHeight:.infinity).navigationSplitViewColumnWidth(min:240,ideal:250,max:300)
+            }.padding(.horizontal,18).frame(maxHeight:.infinity).navigationSplitViewColumnWidth(min:270,ideal:280,max:340)
         } detail: {
             VStack(alignment:.leading,spacing:0) {
                 HStack(alignment:.firstTextBaseline) {
@@ -64,7 +68,7 @@ struct MainView: View {
                     }.padding(12).background(fetchmunkAccent.opacity(0.08),in:RoundedRectangle(cornerRadius:10)).padding(.top,12)
                 }
                 HStack {
-                    Text(model.selection=="history" ? "HISTORIA" : "POBIERANIE").font(.system(size:11,weight:.semibold)).tracking(1.4).foregroundStyle(.secondary)
+                    Text(sectionTitle).font(.system(size:11,weight:.semibold)).tracking(1.4).foregroundStyle(.secondary)
                     Spacer()
                     if model.activeCount>0 {
                         Button(model.queueEnabled ? "Wstrzymaj kolejkę" : "Kontynuuj kolejkę") { Task { await model.toggleQueue() } }
@@ -76,6 +80,7 @@ struct MainView: View {
                     Text("TERAZ POBIERANE").font(.caption).foregroundStyle(.secondary)
                     JobRow(job:job,model:model).padding(.bottom,12)
                 }
+                searchBar.padding(.bottom,12)
                 HStack {
                     if model.history.loading { ProgressView().controlSize(.small) }
                     if model.history.stale {
@@ -89,19 +94,52 @@ struct MainView: View {
                         .disabled(!model.ready || model.history.loading || model.history.nextCursor == nil)
                 }.padding(.bottom,12)
                 if model.visibleJobs.isEmpty {
-                    VStack(spacing:14) {
-                        Image(systemName:"tray.and.arrow.down").font(.system(size:43,weight:.light)).foregroundStyle(fetchmunkAccent.opacity(0.75))
-                        Text(model.selection=="all" ? "Twoje pliki zaczynają się od linku." : "Tutaj jeszcze nic nie ma.").font(.system(size:17,weight:.medium,design:.rounded))
-                        Text("Bez terminala. Bez ręcznej konfiguracji.").font(.subheadline).foregroundStyle(.secondary)
-                        if model.selection=="all" { Text("Ten build obsługuje publiczne źródła. Logowanie pojawi się później.").font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center) }
-                    }.frame(maxWidth:.infinity,maxHeight:.infinity).padding(30)
+                    emptyState
                 } else {
                     ScrollView {
                         LazyVStack(spacing:10) { ForEach(model.visibleJobs) { job in JobRow(job:job,model:model) } }.padding(.bottom,20)
                     }
                 }
             }.padding(28).frame(minWidth:570,minHeight:500).background(Color(nsColor:.windowBackgroundColor))
-        }.frame(minWidth:800,minHeight:560).onAppear { urlFocused=true }
+        }.frame(minWidth:870,minHeight:660).onAppear { urlFocused=true }
+            .onChange(of:model.addressFocusToken) { _ in urlFocused=true }
+    }
+    private var sectionTitle: String {
+        ["all":"POBIERANIE", "active":"W KOLEJCE", "history":"HISTORIA", "completed":"UKOŃCZONE", "failed":"DO SPRAWDZENIA", "cancelled":"ANULOWANE"][model.selection] ?? "HISTORIA"
+    }
+    private var searchBar: some View {
+        HStack(spacing:8) {
+            Image(systemName:"magnifyingglass").foregroundStyle(.secondary)
+            TextField("Szukaj adresu lub katalogu…",text:$model.searchInput)
+                .textFieldStyle(.plain).onSubmit { Task { await model.search() } }
+                .accessibilityLabel("Wyszukaj w historii")
+            if !model.searchInput.isEmpty || !model.history.query.isEmpty {
+                Button { Task { await model.clearSearch() } } label: { Image(systemName:"xmark.circle.fill") }
+                    .buttonStyle(.plain).accessibilityLabel("Wyczyść wyszukiwanie").disabled(!model.ready)
+            }
+            Button("Szukaj") { Task { await model.search() } }.disabled(!model.ready)
+        }.padding(9).background(.background,in:RoundedRectangle(cornerRadius:8))
+            .help("Wpisz fragment adresu lub katalogu i naciśnij Return. Liczniki w panelu obejmują całą bazę.")
+    }
+    private var emptyState: some View {
+        VStack(spacing:14) {
+            if model.history.loading {
+                ProgressView().controlSize(.regular)
+                Text("Wczytywanie listy…")
+            } else if !model.history.query.isEmpty {
+                Image(systemName:"magnifyingglass").font(.system(size:36,weight:.light))
+                Text("Brak wyników w tym widoku.").font(.headline)
+                Text("Zmień zapytanie lub wybierz inną zakładkę.").foregroundStyle(.secondary)
+                Button("Wyczyść wyszukiwanie") { Task { await model.clearSearch() } }.disabled(!model.ready)
+            } else if model.currentJob != nil && model.selection == "active" {
+                Text("Bieżące pobieranie znajdziesz powyżej.").foregroundStyle(.secondary)
+            } else {
+                Image(systemName:"tray.and.arrow.down").font(.system(size:43,weight:.light)).foregroundStyle(fetchmunkAccent.opacity(0.75))
+                Text(model.selection=="all" ? "Twoje pliki zaczynają się od linku." : "Tutaj jeszcze nic nie ma.").font(.system(size:17,weight:.medium,design:.rounded))
+                Text("Bez terminala. Bez ręcznej konfiguracji.").font(.subheadline).foregroundStyle(.secondary)
+                if model.selection=="all" { Text("Ten build obsługuje publiczne źródła. Logowanie pojawi się później.").font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center) }
+            }
+        }.frame(maxWidth:.infinity,maxHeight:.infinity).padding(24)
     }
     private func sidebarItem(_ title:String,icon:String,tag:String,count:Int) -> some View {
         Button { Task { await model.select(tag) } } label: {
@@ -111,6 +149,6 @@ struct MainView: View {
             }.font(.system(size:13,weight:model.selection==tag ? .semibold : .regular)).padding(.horizontal,11).padding(.vertical,10)
                 .background(model.selection==tag ? fetchmunkAccent.opacity(0.12) : .clear,in:RoundedRectangle(cornerRadius:8))
                 .foregroundStyle(model.selection==tag ? fetchmunkAccent : .primary)
-        }.buttonStyle(.plain)
+        }.buttonStyle(.plain).accessibilityAddTraits(model.selection==tag ? .isSelected : [])
     }
 }

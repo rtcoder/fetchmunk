@@ -63,6 +63,9 @@ jobs:
       - name: Test backend
         run: PYTHONPATH=backend/src backend/.venv/bin/pytest backend/tests -q
 
+      - name: Test bundle metadata
+        run: backend/.venv/bin/python -m unittest discover -s scripts/tests -v
+
       - name: Test macOS client
         run: swift test --package-path macos
 

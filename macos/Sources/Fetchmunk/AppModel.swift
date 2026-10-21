@@ -8,6 +8,10 @@ import AppKit
     @Published var activeCount = 0
     @Published var historyCount = 0
     @Published var completedCount = 0
+    @Published var failedCount = 0
+    @Published var cancelledCount = 0
+    @Published var searchInput = ""
+    @Published var addressFocusToken = 0
     @Published var inputURL = ""
     @Published var destination: URL
     @Published var ready = false
@@ -44,7 +48,7 @@ import AppKit
         let executable = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/FetchmunkBackend.app/Contents/MacOS/fetchmunk-backend")
         do {
             try await backend.start(executableURL:executable)
-            guard await backend.capabilities.contains("paged_jobs") else { throw ClientError.backend("dependency_unsupported") }
+            guard await backend.capabilities.isSuperset(of: ["paged_jobs", "history_search"]) else { throw ClientError.backend("dependency_unsupported") }
             eventTask = Task { [weak self] in
                 for await event in backend.events {
                     guard !Task.isCancelled else { break }
@@ -104,25 +108,45 @@ import AppKit
             let total = result["total"].int ?? 0
             let active = result["active"].int ?? 0
             let completed = result["completed"].int ?? 0
-            if total != totalCount || active != activeCount || completed != completedCount { history.stale = true }
+            if total != totalCount || active != activeCount || completed != completedCount ||
+                (result["failed"].int ?? 0) != failedCount || (result["cancelled"].int ?? 0) != cancelledCount { history.stale = true }
             summarySequence = seq
             totalCount = total;activeCount = active;completedCount = completed
             historyCount = result["history"].int ?? 0
+            failedCount = result["failed"].int ?? 0
+            cancelledCount = result["cancelled"].int ?? 0
             queueEnabled = result["queue_enabled"].bool ?? queueEnabled
             currentJob = result["current_job"] == .null ? nil : try result["current_job"].decoded(Job.self)
         } catch { message = error.localizedDescription }
     }
     func select(_ filter: String) async {
-        guard ["all","active","history"].contains(filter) else { return }
+        guard ["all","active","history","completed","failed","cancelled"].contains(filter) else { return }
         await loadPage(filter:filter)
     }
-    func loadPage(cursor: String? = nil, preserveAnchor: Bool = false, filter: String? = nil) async {
+    func search() async {
+        guard searchInput.unicodeScalars.count <= 200, !searchInput.contains("\0") else {
+            message = "Wyszukiwanie może mieć najwyżej 200 znaków i nie może zawierać znaku NUL."
+            return
+        }
+        message = nil
+        await loadPage(query: searchInput)
+    }
+    func clearSearch() async {
+        searchInput = ""
+        await loadPage(query: "")
+    }
+    func refreshHistory() async {
+        await refreshSummary()
+        await loadPage(preserveAnchor:true)
+    }
+    func loadPage(cursor: String? = nil, preserveAnchor: Bool = false, filter: String? = nil, query: String? = nil) async {
         guard let client else { return }
         let selected = filter ?? selection
-        let fallbackAnchor = selected == selection ? history.anchor : nil
-        let token = history.begin(filter:selected)
+        let selectedQuery = query ?? history.query
+        let fallbackAnchor = selected == selection && selectedQuery == history.query ? history.anchor : nil
+        let token = history.begin(filter:selected,query:selectedQuery)
         defer { if token == history.generation { history.loading = false } }
-        var params: [String:JSONValue] = ["limit":.number(100),"filter":.string(selected)]
+        var params: [String:JSONValue] = ["limit":.number(100),"filter":.string(selected),"query":.string(selectedQuery)]
         if let cursor { params["cursor"] = .string(cursor) }
         else if preserveAnchor, let fallbackAnchor { params["anchor"] = fallbackAnchor }
         do {
@@ -151,8 +175,9 @@ import AppKit
             _ = try await client.request(method:"jobs.create",params:params)
             pendingCreation = nil
             if inputURL.trimmingCharacters(in:.whitespacesAndNewlines)==url { inputURL="" }
+            searchInput = ""
             await refreshSummary()
-            await select("all")
+            await loadPage(filter:"all",query:"")
         } catch ClientError.backend(let code) {
             pendingCreation = nil; message = errorMessage(code)
         } catch {

@@ -6,7 +6,17 @@ Native desktop downloads powered by gallery-dl. Paste a link, download, open you
 
 A working **local macOS Apple Silicon build** is implemented in SwiftUI with a bundled Python backend. The `.app` includes Python, gallery-dl and its dependencies; end users do not install a runtime or use a terminal.
 
-Implemented: public downloads, persistent queue/history, file counters and per-file progress when available, cancellation, retry, directory selection, opening downloaded files, restart recovery and readable errors. Only one download worker runs at a time. A restarted queue requires an explicit resume.
+Implemented: public downloads, persistent queue/history, file counters and per-file
+progress when available, cancellation, retry, directory selection, opening downloaded
+files, restart recovery and readable errors. Only one download worker runs at a time.
+A restarted queue requires an explicit resume.
+
+History supports literal text searches over the displayed URL and output directory,
+with active, completed, failed and cancelled filters and independent global counters.
+Job details show timestamps, attempts and transfer information when available;
+the explicitly copied diagnostic report excludes URLs, local paths and filenames.
+The interface has system/light/dark appearance and a configurable default directory.
+Per-file progress does not imply a known percentage for the whole gallery.
 
 This is not a public release: no Developer ID/notarization, automatic updates or authentication UI. History is paged in groups of up to 100 records, with a separate current-transfer view and global counters. The 1000-job ceiling has been removed; a 100,000-record database is covered by the scale benchmark. Windows/Linux UI is not implemented. C#/Avalonia remains the selected direction for those platforms. The current backend uses Unix process locking and needs a Windows portability pass.
 
@@ -29,9 +39,16 @@ PYTHONPATH=backend/src backend/.venv/bin/pytest backend/tests -q
 swift test --package-path macos
 scripts/build_macos.sh
 python3 scripts/smoke_bundle.py --app dist/Fetchmunk.app
+backend/.venv/bin/python -m unittest discover -s scripts/tests -v
 ```
 
 The bootstrap uses Python 3.13.16 from python-build-standalone; dependency hashes are locked in `backend/requirements.lock`. Versions and runtime provenance are recorded in `packaging/toolchain.json`. The build rejects Mach-O deployment targets newer than macOS 13.
+
+The app also contains `build-manifest.json`, `THIRD_PARTY_NOTICES.txt` and available
+license texts under `Contents/Resources`. They are generated from the runtime
+collection inventory and installed package metadata. Missing license texts are
+reported explicitly. Native/vendored components still need review, and the project
+license remains undecided; this is not a completed redistribution audit.
 
 ## GitHub Actions installers
 
@@ -55,6 +72,7 @@ retroactively. Use a manual run to test the workflow without moving that tag.
 
 ## Documentation
 
+- [Installation and release checklist](docs/release.md)
 - [History scaling: verification](docs/verification/history-scaling.md)
 - [First build: verification and limitations](docs/verification/first-build.md)
 - [MVP design](docs/design/mvp.md)

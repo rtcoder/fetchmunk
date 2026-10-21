@@ -1,6 +1,7 @@
 """Verify the shipped coordinator, not the development Python environment."""
 
-import argparse, http.server, json, queue, subprocess, tempfile, threading, time
+import argparse, http.server, json, plistlib, queue, subprocess, tempfile, threading, time
+from bundle_metadata import validate
 from pathlib import Path
 
 MEDIA = b"\x89PNG\r\n\x1a\nfetchmunk-bundle-smoke"
@@ -18,6 +19,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 def check(app):
+    with (app / "Contents/Info.plist").open("rb") as stream:
+        version = plistlib.load(stream)["CFBundleShortVersionString"]
+    manifest = validate(app / "Contents/Resources", version)
     exe = app / "Contents/Helpers/FetchmunkBackend.app/Contents/MacOS/fetchmunk-backend"
     if not exe.is_file():
         raise SystemExit(f"Missing bundled backend: {exe}")
@@ -67,6 +71,7 @@ def check(app):
             try:
                 hello = messages.get(timeout=10)
                 assert hello["type"] == "hello"
+                assert hello["engine_version"] == manifest["gallery_dl_version"], "Bundled engine differs from manifest"
                 handshake = time.monotonic() - start
                 assert "paged_jobs" in hello["capabilities"]
                 initialized = call(
@@ -114,6 +119,8 @@ def check(app):
                             "isolation": "PATH=/usr/bin:/bin; temporary cwd; no user config",
                             "idempotency": "PASS",
                             "shutdown": "PASS",
+                            "bundle_metadata": "PASS",
+                            "missing_license_texts": manifest["missing_license_texts"],
                         },
                         indent=2,
                     )

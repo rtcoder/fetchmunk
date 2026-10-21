@@ -12,18 +12,19 @@ struct HistoryPage: Codable, Sendable {
 struct HistoryState {
     private(set) var jobs: [Job] = []
     private(set) var filter = "all"
+    private(set) var query = ""
     private(set) var generation = 0
     private(set) var nextCursor: String?
     private(set) var previousCursor: String?
     var loading = false
     var stale = false
 
-    mutating func begin(filter: String) -> Int {
+    mutating func begin(filter: String, query: String = "") -> Int {
         generation += 1
-        if self.filter != filter {
+        if self.filter != filter || self.query != query {
             jobs = [];nextCursor = nil;previousCursor = nil;stale = false
         }
-        self.filter = filter;loading = true
+        self.filter = filter;self.query = query;loading = true
         return generation
     }
     mutating func accept(_ page: HistoryPage, token: Int) throws -> Bool {
