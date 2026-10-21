@@ -5,7 +5,7 @@ from fetchmunk_backend.store import JobStore
 
 
 def job(id, state='completed', attempt=1):
-    return dict(job_id=id, state=state, attempt=attempt, revision=1, created_at='2026-01-01T00:00:00+00:00')
+    return dict(job_id=id, state=state, attempt=attempt, revision=1, created_at='2026-01-01T00:00:00+00:00', updated_at='2026-01-01T00:00:00+00:00', url='https://example.org/a.png', display_url='https://example.org/a.png', destination='/tmp', output_dir='/tmp/out', downloaded=0, skipped=0, failed_files=0, current_file=None, error=None)
 
 
 def legacy(path, invalid=False):
@@ -85,4 +85,16 @@ def test_backup_failure_does_not_start_migration(tmp_path):
     db=sqlite3.connect(tmp_path/'state.sqlite')
     assert db.execute('PRAGMA user_version').fetchone()[0]==1
     assert [x[1] for x in db.execute('PRAGMA table_info(jobs)')]==['id','data']
+    db.close()
+
+
+@pytest.mark.parametrize('invalid', [{'job_id':'a'}, {'job_id':'a','state':'extracting','created_at':'2026'}, [], {'job_id':'a','state':False,'revision':1}])
+def test_structurally_invalid_legacy_record_does_not_upgrade(tmp_path,invalid):
+    legacy(tmp_path)
+    db=sqlite3.connect(tmp_path/'state.sqlite')
+    db.execute('UPDATE jobs SET data=?',(json.dumps(invalid),));db.commit();db.close()
+    with pytest.raises(sqlite3.DatabaseError):JobStore.open(tmp_path)
+    db=sqlite3.connect(tmp_path/'state.sqlite')
+    assert db.execute('PRAGMA user_version').fetchone()[0]==1
+    assert json.loads(db.execute('SELECT data FROM jobs').fetchone()[0])==invalid
     db.close()

@@ -77,7 +77,12 @@ import AppKit
             await loadPage(preserveAnchor:true)
             return
         }
-        if event["event"].string == "queue.changed" { queueEnabled = event["data"]["queue_enabled"].bool ?? queueEnabled }
+        if event["event"].string == "queue.changed" {
+            queueEnabled = event["data"]["queue_enabled"].bool ?? queueEnabled
+            if let code = event["data"]["error"]["code"].string {
+                message = "Zatrzymano kolejkę. " + errorMessage(code)
+            }
+        }
         guard event["event"].string == "job.changed", let id = event["data"]["job_id"].string else { return }
         await refreshSummary()
         // Invisible history never gets appended to the page.
@@ -95,7 +100,7 @@ import AppKit
         do {
             let result = try await client.request(method:"jobs.summary",params:.object([:]))
             let seq = result["at_seq"].int ?? -1
-            guard seq >= summarySequence else { return }
+            guard seq >= max(summarySequence,lastSequence) else { return }
             let total = result["total"].int ?? 0
             let active = result["active"].int ?? 0
             let completed = result["completed"].int ?? 0

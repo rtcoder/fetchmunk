@@ -1,6 +1,6 @@
 # Fetchmunk — projekt protokołu GUI ↔ backend v1
 
-Status: propozycja do przeglądu. Nie istnieje jeszcze implementacja.
+Status: v1 jest zaimplementowana dla zadań; rozszerzenie `paged_jobs` dodano 2026-10-21. Metody `auth.*` pozostają planowane i zwracają `dependency_unsupported`.
 Powiązany dokument: [MVP i architektura](mvp.md).
 
 ## Transport i wersjonowanie
@@ -69,7 +69,8 @@ nie sukces pobierania ani potwierdzenie dostępności zdalnego źródła.
 | `session.initialize` | `data_dir`, `default_destination` | `schema_version`, `queue_enabled` |
 | `jobs.create` | `url`, `destination` | `job_id`, `revision` |
 | `jobs.get` | `job_id` | pełne zadanie |
-| `jobs.snapshot` | opcjonalne `cursor`, `limit` 1–100 | `snapshot_id`, `at_seq`, `jobs`, `next_cursor` |
+| `jobs.snapshot` | opcjonalne `cursor`, `limit` 1–100, `filter`, `anchor` | `snapshot_id`, `at_seq`, `jobs`, `next_cursor`, `previous_cursor` |
+| `jobs.summary` | brak | `total`, `active`, `history`, `completed`, `current_job`, `queue_enabled`, `at_seq` |
 | `jobs.cancel` | `job_id` | aktualne pełne zadanie |
 | `jobs.retry` | `job_id` | aktualne pełne zadanie z nową próbą |
 | `queue.set_enabled` | `enabled` | `queue_enabled` |
@@ -226,3 +227,24 @@ Wymagane scenariusze w przyszłej implementacji:
 - awaria każdego z trzech procesów i brak osieroconych transferów;
 - częściowy sukces, pusta galeria, same pominięte pliki i wygasła sesja;
 - brak sekretów w logach i nieograniczonego buforowania postępu.
+
+## Rozszerzenie paged_jobs (2026-10-21)
+
+Nowy frontend wymaga capability `paged_jobs`. Filtr snapshot: `all` (domyślny),
+`active` (stany aktywne + queued + needs_auth) lub `history` (pozostałe).
+Porządek: created_at malejąco, a przy remisie job_id malejąco. Kursory są
+nieprzezroczyste i przypisane do migawki oraz filtra; nie należy ich parsować.
+`anchor: [created_at, job_id]` rozpoczyna nową migawkę od rekordu o kluczu
+nie większym od podanego, przydatne po snapshot_expired. Nie łączymy anchor
+z cursor w GUI. Liczniki summary dotyczą całej bazy; current_job jest pełnym
+bieżącym zadaniem albo null.
+
+Backend używa maksymalnie czterech transakcji odczytu WAL, TTL60s. Budget WAL
+64MiB jest progiem unieważniania migawek i próby checkpointu, nie ścisłym
+limitem rozmiaru pliku. GUI pobiera jedną stronę, nie iteruje po next_cursor
+automatycznie. Przerwa w zdarzeniach odświeża summary i widoczną stronę.
+
+Błąd zapisu/checkpointu zatrzymuje kolejkę i może wysłać `queue.changed`
+z `queue_enabled: false` oraz `error.code`. Zatwierdzone wcześniej jobs.create
+zachowuje wynik i operation_id; błąd późniejszego uruchomienia zadania nie
+cofa zapisanego zgłoszenia. Migracja schema1→2 waliduje rekordy i tworzy backup.

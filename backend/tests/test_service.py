@@ -182,3 +182,42 @@ def test_large_history_summary_and_paging_do_not_load_all_jobs(service, monkeypa
     assert len(call(service,'jobs.snapshot',filter='history')['jobs'])==100
     call(service,'queue.set_enabled',enabled=True)
     assert call(service,'jobs.summary')['current_job']['job_id']==first['job_id']
+
+
+def full_disk():
+    import sqlite3
+    e=sqlite3.OperationalError('simulated full disk');e.sqlite_errorcode=sqlite3.SQLITE_FULL
+    return e
+
+
+def test_scheduler_disk_error_keeps_committed_create_idempotent(service,monkeypatch):
+    emitted=[];service.emit=emitted.append
+    original=service.store.save_job
+    def fail_start(job,db=None):
+        if job['state']=='extracting':raise full_disk()
+        return original(job,db)
+    monkeypatch.setattr(service.store,'save_job',fail_start)
+    params=dict(operation_id='full',url='https://example.org/a.png',destination=str(service.destination))
+    first=call(service,'jobs.create',**params)
+    assert call(service,'jobs.create',**params)==first
+    assert service.active is None and not service.queue_enabled
+    assert service.store.get_job(first['job_id'])['state']=='queued'
+    assert any(e['data'].get('error',{}).get('code')=='disk_full' for e in emitted)
+
+
+def test_checkpoint_failure_is_controlled_and_worker_failure_stops_queue(service,monkeypatch):
+    original=service.snapshots.maintain
+    def broken(store):raise OSError(28,'simulated checkpoint failure')
+    monkeypatch.setattr(service.snapshots,'maintain',broken)
+    result=call(service,'jobs.summary')
+    assert result['total']==0
+    assert not service.queue_enabled
+    monkeypatch.setattr(service.snapshots,'maintain',original)
+    call(service,'queue.set_enabled',enabled=True)
+    jid=add(service);request=service.supervisor.request
+    original_save=service.store.save_job
+    monkeypatch.setattr(service.store,'save_job',lambda *a,**k:(_ for _ in ()).throw(full_disk()))
+    service.on_worker(request,dict(kind='file.start',data=dict(name='a.png')))
+    assert service.active is None and not service.queue_enabled
+    assert service.supervisor.request is None
+    monkeypatch.setattr(service.store,'save_job',original_save)

@@ -8,7 +8,9 @@ A working **local macOS Apple Silicon build** is implemented in SwiftUI with a b
 
 Implemented: public downloads, persistent queue/history, file counters and per-file progress when available, cancellation, retry, directory selection, opening downloaded files, restart recovery and readable errors. Only one download worker runs at a time. A restarted queue requires an explicit resume.
 
-This is not a public release: no Developer ID/notarization, automatic updates or authentication UI. The local build supports at most **1000 jobs**, including history; it refuses additional jobs rather than deleting existing data. Windows/Linux UI is not implemented. C#/Avalonia remains the selected direction for those platforms. The current backend uses Unix process locking and needs a Windows portability pass.
+This is not a public release: no Developer ID/notarization, automatic updates or authentication UI. History is paged in groups of up to 100 records, with a separate current-transfer view and global counters. The 1000-job ceiling has been removed; a 100,000-record database is covered by the scale benchmark. Windows/Linux UI is not implemented. C#/Avalonia remains the selected direction for those platforms. The current backend uses Unix process locking and needs a Windows portability pass.
+
+Existing schema-1 databases are backed up to `state-before-v2.sqlite` in the application data directory before the transactional schema-2 migration. Older builds cannot open schema 2; keep the backup if you need to roll back.
 
 ## Local artifacts
 
@@ -33,6 +35,7 @@ The bootstrap uses Python 3.13.16 from python-build-standalone; dependency hashe
 
 ## Documentation
 
+- [History scaling: verification](docs/verification/history-scaling.md)
 - [First build: verification and limitations](docs/verification/first-build.md)
 - [MVP design](docs/design/mvp.md)
 - [GUI–backend protocol](docs/design/protocol-v1.md)

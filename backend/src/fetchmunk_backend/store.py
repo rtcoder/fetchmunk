@@ -20,6 +20,31 @@ def timestamp():
     return datetime.now(timezone.utc).isoformat()
 
 
+def validate_legacy(db):
+    # Stream validation before any schema change. Never include private row data in errors.
+    states = set(PENDING) | {'completed','partial','empty','failed','cancelled','interrupted'}
+    strings = ('job_id','state','url','display_url','destination','output_dir','created_at','updated_at')
+    for jid, raw in db.execute('SELECT id,data FROM jobs'):
+        try:
+            job = json.loads(raw)
+            valid = (isinstance(job,dict) and all(isinstance(job.get(k),str) for k in strings)
+                     and job['job_id']==jid and job['state'] in states
+                     and all(type(job.get(k)) is int and job[k]>=1 for k in ('revision','attempt'))
+                     and all(type(job.get(k)) is int and job[k]>=0 for k in ('downloaded','skipped','failed_files')))
+            if not valid:raise ValueError()
+            current = job.get('current_file')
+            if current is not None:
+                if not isinstance(current,dict) or not isinstance(current.get('name'),str):raise ValueError()
+                if type(current.get('bytes_done')) is not int or current['bytes_done']<0:raise ValueError()
+                for key in ('bytes_total','bytes_per_second'):
+                    if current.get(key) is not None and (type(current[key]) not in (int,float) or current[key]<0):raise ValueError()
+            error = job.get('error')
+            if error is not None and (not isinstance(error,dict) or not isinstance(error.get('code'),str)
+                                      or not isinstance(error.get('action'),str) or type(error.get('retryable')) is not bool):raise ValueError()
+        except (ValueError,TypeError,KeyError):
+            raise sqlite3.DatabaseError('invalid legacy job record') from None
+
+
 def migrate(db, data_dir, version):
     if version == 0:
         db.executescript('''CREATE TABLE jobs(id TEXT PRIMARY KEY,data TEXT NOT NULL);
@@ -44,6 +69,7 @@ PRAGMA user_version=1;''')
     if version <= 1:
         db.execute('BEGIN IMMEDIATE')
         try:
+            validate_legacy(db)
             for statement in (
                 'ALTER TABLE jobs ADD COLUMN state TEXT',
                 'ALTER TABLE jobs ADD COLUMN created_at TEXT',

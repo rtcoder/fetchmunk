@@ -68,11 +68,13 @@ def check(app):
                 hello = messages.get(timeout=10)
                 assert hello["type"] == "hello"
                 handshake = time.monotonic() - start
-                call(
+                assert "paged_jobs" in hello["capabilities"]
+                initialized = call(
                     "session.initialize",
                     data_dir=tmp + "/state",
                     default_destination=tmp + "/files",
                 )
+                assert initialized["schema_version"] == 2
                 params = dict(
                     url=f"http://127.0.0.1:{server.server_port}/sample.png",
                     destination=tmp + "/files",
@@ -94,6 +96,11 @@ def check(app):
                     for f in Path(job["output_dir"]).rglob("*")
                     if f.is_file()
                 )
+                summary = call("jobs.summary")
+                assert summary["total"] == 1 and summary["completed"] == 1
+                page = call("jobs.snapshot", filter="history")
+                assert [j["job_id"] for j in page["jobs"]] == [created["job_id"]]
+                assert page["next_cursor"] is None and page["previous_cursor"] is None
                 call("app.shutdown", reason="quit")
                 p.wait(timeout=10)
                 assert p.returncode == 0, p.stderr.read()

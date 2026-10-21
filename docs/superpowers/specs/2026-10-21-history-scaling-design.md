@@ -1,6 +1,6 @@
 # Historia bez limitu 1000 zadań — projekt kolejnego etapu
 
-Status: propozycja do zatwierdzenia; brak zmian implementacji.
+Status: zatwierdzony przez użytkownika 2026-10-21; wdrażany według planu history-scaling. Wyniki faktycznych kontroli zawiera raport weryfikacji.
 
 ## Cel i granice
 
@@ -67,4 +67,4 @@ Frontend trzyma bieżącą stronę, najwyżej jedną przygotowaną stronę sąsi
 3. Stronicowany model SwiftUI i testy wyścigów odświeżania.
 4. Pomiar dużej historii, usunięcie limitu 1000, przebudowa i raport.
 
-Do zatwierdzenia pozostaje przede wszystkim jawna nawigacja po stronach zamiast nieskończonego przewijania. Pozostałe wybory są proponowanymi szczegółami wykonawczymi, bez nowych zależności produktu.
+Użytkownik zatwierdził jawną nawigację po stronach poleceniem „dzialaj”. Zmiana nie dodaje zależności produktu.

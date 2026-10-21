@@ -152,10 +152,33 @@ class JobService:
                     "message_key": "error." + code,
                     "retryable": True,
                 }
-            self.pump()
-            if self.store:
-                self.snapshots.maintain(self.store)
+            try:
+                self.pump()
+                if self.store:
+                    self.snapshots.maintain(self.store)
+            except (sqlite3.DatabaseError, OSError) as exc:
+                self.pause_for_storage_error(exc)
             return response
+
+    def pause_for_storage_error(self, exc):
+        # A create may already be committed: keep its successful response/idempotency.
+        active, self.active = self.active, None
+        self.queue_enabled = False
+        code = "disk_full" if getattr(exc, "errno", None) == 28 or getattr(exc, "sqlite_errorcode", None) == sqlite3.SQLITE_FULL else "database_error"
+        if self.store:
+            try:
+                self.store.db.rollback()
+                if active:
+                    job = self.store.get_job(active)
+                    if job["state"] in ACTIVE:
+                        job.update(state="interrupted",revision=job["revision"]+1,updated_at=timestamp(),current_file=None)
+                        self.store.save_job(job)
+                        self.event("job.changed", {"job_id":active,"revision":job["revision"]})
+            except (sqlite3.DatabaseError, OSError):
+                self.store.db.rollback()
+        if active:
+            self.supervisor.stop("storage_error")
+        self.event("queue.changed", {"queue_enabled":False,"error":{"code":code}})
 
     @staticmethod
     def absolute_path(value):
@@ -304,8 +327,15 @@ class JobService:
         }
 
     def on_worker(self, request, event):
+        try:
+            self._on_worker(request, event)
+        except (sqlite3.DatabaseError, OSError) as exc:
+            with self.lock:
+                self.pause_for_storage_error(exc)
+
+    def _on_worker(self, request, event):
         with self.lock:
-            if self.closed or not self.store:
+            if self.closed or not self.store or self.active != request.job_id:
                 return
             job = self.store.get_job(request.job_id)
             if job["attempt"] != request.attempt or job["state"] not in ACTIVE:
@@ -375,10 +405,13 @@ class JobService:
             self.supervisor.join(6)
         with self.lock:
             self.snapshots.close()
-            if self.store:
-                self.store.recover_interrupted()
-                self.store.close()
-            self.closed = True
+            try:
+                if self.store:
+                    self.store.recover_interrupted()
+            finally:
+                if self.store:
+                    self.store.close()
+                self.closed = True
 
 
 def serve():

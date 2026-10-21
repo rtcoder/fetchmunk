@@ -103,3 +103,21 @@ extension HistoryTests {
         XCTAssertFalse(model.history.loading)
     }
 }
+
+extension HistoryTests {
+    @MainActor func testStorageFailureEventExplainsPausedQueue() async {
+        let model=AppModel()
+        await model.consume(.object(["event":.string("queue.changed"),"seq":.number(1),"session_id":.string("s"),"data":.object(["queue_enabled":.bool(false),"error":.object(["code":.string("disk_full")])])]))
+        XCTAssertFalse(model.queueEnabled)
+        XCTAssertTrue(model.message?.contains(errorMessage("disk_full")) == true)
+    }
+}
+
+extension HistoryTests {
+    @MainActor func testSummaryOlderThanSeenEventCannotReenableQueue() async {
+        let backend=HistoryBackend();let model=AppModel(client:backend)
+        await model.consume(.object(["event":.string("queue.changed"),"seq":.number(3),"session_id":.string("s"),"data":.object(["queue_enabled":.bool(false)])]))
+        await model.refreshSummary() // fixture reply was captured at seq 2
+        XCTAssertFalse(model.queueEnabled)
+    }
+}
