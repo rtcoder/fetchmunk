@@ -33,6 +33,26 @@ python3 scripts/smoke_bundle.py --app dist/Fetchmunk.app
 
 The bootstrap uses Python 3.13.16 from python-build-standalone; dependency hashes are locked in `backend/requirements.lock`. Versions and runtime provenance are recorded in `packaging/toolchain.json`. The build rejects Mach-O deployment targets newer than macOS 13.
 
+## GitHub Actions installers
+
+[Build desktop installers](.github/workflows/build-desktop.yml) runs on a pushed
+`v*` tag and can also be started manually from the Actions tab. The macOS job
+uses an Apple Silicon `macos-15` runner, installs the pinned uv version and
+locked Python dependencies, runs both test suites, builds the app/DMG, and
+smoke-tests the app both directly and from the mounted read-only disk image.
+
+Download the DMG and its SHA-256 file from the run's **Artifacts** section
+(retained for 30 days). Tag builds use `Fetchmunk-vX.Y.Z-macos-arm64.dmg`;
+manual branch builds include `dev-<commit>` in the filename. Tags must follow
+`vX.Y.Z` or `vX.Y.Z-prerelease`, with the numeric version matching
+`CFBundleShortVersionString` in `packaging/Info.plist`.
+
+The workflow produces ad hoc signed builds, without Developer ID or notarization,
+and does not create GitHub Releases. It needs no signing secrets. Windows and
+Linux packaging will be added as separate jobs when those clients are ready.
+The existing `v0.1.0` tag predates the workflow; it will not trigger a build
+retroactively. Use a manual run to test the workflow without moving that tag.
+
 ## Documentation
 
 - [History scaling: verification](docs/verification/history-scaling.md)

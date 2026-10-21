@@ -1,0 +1,99 @@
+name: Build desktop installers
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Add independent Windows/Linux jobs when their clients and packaging exist.
+  macos:
+    name: macOS · Apple Silicon
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate version and runner
+        id: package
+        run: |
+          test "$(uname -m)" = arm64
+          swift --version
+          python3 - <<'PY'
+          import os, plistlib, re
+          from pathlib import Path
+          with Path('packaging/Info.plist').open('rb') as file:
+              version = plistlib.load(file)['CFBundleShortVersionString']
+          if os.environ['GITHUB_REF_TYPE'] == 'tag':
+              label = os.environ['GITHUB_REF_NAME']
+              match = re.fullmatch(r'v(\d+\.\d+\.\d+)(?:-[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)*)?', label)
+              if not match or match[1] != version:
+                  raise SystemExit('Tag must be vX.Y.Z[-prerelease] and match CFBundleShortVersionString')
+          else:
+              label = f"v{version}-dev-{os.environ['GITHUB_SHA'][:12]}"
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'name=Fetchmunk-{label}-macos-arm64\n')
+          PY
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: '0.13.1'
+          enable-cache: false
+
+      - name: Bootstrap bundled Python and locked dependencies
+        run: scripts/bootstrap.sh
+
+      - name: Test backend
+        run: PYTHONPATH=backend/src backend/.venv/bin/pytest backend/tests -q
+
+      - name: Test macOS client
+        run: swift test --package-path macos
+
+      - name: Build application and DMG
+        run: scripts/build_macos.sh
+
+      - name: Smoke test packaged application
+        run: backend/.venv/bin/python scripts/smoke_bundle.py --app dist/Fetchmunk.app
+
+      - name: Smoke test read-only DMG
+        run: |
+          mount_dir="$RUNNER_TEMP/fetchmunk-dmg"
+          mkdir -p "$mount_dir"
+          hdiutil attach dist/Fetchmunk-local-arm64.dmg -readonly -nobrowse -mountpoint "$mount_dir"
+          trap 'hdiutil detach "$mount_dir"' EXIT
+          backend/.venv/bin/python scripts/smoke_bundle.py --app "$mount_dir/Fetchmunk.app"
+
+      - name: Prepare installer and checksum
+        env:
+          PACKAGE_NAME: ${{ steps.package.outputs.name }}
+        run: |
+          mkdir -p dist/installers
+          cp dist/Fetchmunk-local-arm64.dmg "dist/installers/$PACKAGE_NAME.dmg"
+          cd dist/installers
+          shasum -a 256 "$PACKAGE_NAME.dmg" > "$PACKAGE_NAME.dmg.sha256"
+
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: dist/installers/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
