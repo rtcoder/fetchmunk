@@ -82,3 +82,13 @@ def test_anchor_refresh_and_empty_filter(store):
             with pytest.raises(SnapshotError,match='invalid_params'):s.create(store,0,limit=bad)
         with pytest.raises(SnapshotError,match='invalid_params'):s.create(store,0,filter='oops')
     finally:s.close()
+
+
+def test_empty_anchor_refresh_still_allows_newer_navigation(store):
+    seed(store,1);s=SnapshotStore()
+    try:
+        page=s.create(store,0,anchor=['before','gone'])
+        assert page['jobs']==[]
+        assert page['previous_cursor'] is not None
+        assert ids(s.page(page['previous_cursor']))==['000000']
+    finally:s.close()

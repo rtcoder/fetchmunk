@@ -22,7 +22,8 @@ final class ProtocolTests: XCTestCase {
     @MainActor func testOldRevisionCannotReplaceNewJob() throws {
         let model = AppModel()
         let first = Job.example(id: "j", revision: 3, state: "completed")
-        model.apply(first)
+        let token = model.history.begin(filter:"all")
+        _ = try model.history.accept(historyPage([first]),token:token)
         model.apply(Job.example(id: "j", revision: 2, state: "downloading"))
         XCTAssertEqual(model.jobs.first?.state, "completed")
     }

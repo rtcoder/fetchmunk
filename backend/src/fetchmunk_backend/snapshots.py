@@ -134,4 +134,4 @@ class SnapshotStore:
             return self._token(sid,direction,key) if exists else None
         return dict(snapshot_id=sid,at_seq=snap.seq,jobs=items,
                     next_cursor=cursor_for('older',keys[-1]) if keys else None,
-                    previous_cursor=cursor_for('newer',keys[0]) if keys else None)
+                    previous_cursor=cursor_for('newer',keys[0]) if keys else (cursor_for('newer',anchor) if anchor else None))

@@ -12,9 +12,9 @@ struct MainView: View {
                     Text("Fetchmunk").font(.system(size:20,weight:.bold,design:.rounded))
                 }.padding(.top,22)
                 VStack(spacing:5) {
-                    sidebarItem("Wszystkie",icon:"tray.full",tag:"all",count:model.jobs.count)
+                    sidebarItem("Wszystkie",icon:"tray.full",tag:"all",count:model.totalCount)
                     sidebarItem("W kolejce",icon:"arrow.down.circle",tag:"active",count:model.activeCount)
-                    sidebarItem("Historia",icon:"clock",tag:"history",count:model.jobs.count-model.activeCount)
+                    sidebarItem("Historia",icon:"clock",tag:"history",count:model.historyCount)
                 }
                 Spacer()
                 VStack(alignment:.leading,spacing:8) {
@@ -72,6 +72,22 @@ struct MainView: View {
                             .help("Kontroluje rozpoczynanie kolejnych zadań. Nie wstrzymuje aktywnego transferu.")
                     }
                 }.padding(.top,26).padding(.bottom,12)
+                if let job = model.currentJob {
+                    Text("TERAZ POBIERANE").font(.caption).foregroundStyle(.secondary)
+                    JobRow(job:job,model:model).padding(.bottom,12)
+                }
+                HStack {
+                    if model.history.loading { ProgressView().controlSize(.small) }
+                    if model.history.stale {
+                        Button("Lista została zaktualizowana · Odśwież") { Task { await model.loadPage(preserveAnchor:true) } }
+                            .buttonStyle(.plain).font(.caption).foregroundStyle(fetchmunkAccent)
+                    }
+                    Spacer()
+                    Button("Nowsze") { Task { await model.loadPage(cursor:model.history.previousCursor) } }
+                        .disabled(!model.ready || model.history.loading || model.history.previousCursor == nil)
+                    Button("Starsze") { Task { await model.loadPage(cursor:model.history.nextCursor) } }
+                        .disabled(!model.ready || model.history.loading || model.history.nextCursor == nil)
+                }.padding(.bottom,12)
                 if model.visibleJobs.isEmpty {
                     VStack(spacing:14) {
                         Image(systemName:"tray.and.arrow.down").font(.system(size:43,weight:.light)).foregroundStyle(fetchmunkAccent.opacity(0.75))
@@ -88,7 +104,7 @@ struct MainView: View {
         }.frame(minWidth:800,minHeight:560).onAppear { urlFocused=true }
     }
     private func sidebarItem(_ title:String,icon:String,tag:String,count:Int) -> some View {
-        Button { model.selection=tag } label: {
+        Button { Task { await model.select(tag) } } label: {
             HStack(spacing:10) {
                 Image(systemName:icon).frame(width:19)
                 Text(title);Spacer();Text("\(count)").font(.caption).monospacedDigit().foregroundStyle(.secondary)

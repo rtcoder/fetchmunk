@@ -5,7 +5,7 @@ import AppKit
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if quitting { return .terminateLater }
         guard let model else { return .terminateNow }
-        if model.jobs.contains(where: \.isActive) {
+        if model.currentJob != nil {
             let alert=NSAlert();alert.messageText="Zatrzymać pobieranie i zakończyć?"
             alert.informativeText="Ukończone pliki zostaną zachowane. Kolejkę możesz kontynuować po ponownym uruchomieniu."
             alert.addButton(withTitle:"Wróć");alert.addButton(withTitle:"Zatrzymaj i zakończ")

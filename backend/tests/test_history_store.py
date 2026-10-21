@@ -76,3 +76,13 @@ def test_large_store_reopens_and_recovery_only_reads_active(tmp_path,monkeypatch
         assert s.has_jobs()
         assert s.next_queued() is None
     finally:s.close()
+
+
+def test_backup_failure_does_not_start_migration(tmp_path):
+    legacy(tmp_path)
+    (tmp_path/'state-before-v2.sqlite').mkdir()
+    with pytest.raises(OSError):JobStore.open(tmp_path)
+    db=sqlite3.connect(tmp_path/'state.sqlite')
+    assert db.execute('PRAGMA user_version').fetchone()[0]==1
+    assert [x[1] for x in db.execute('PRAGMA table_info(jobs)')]==['id','data']
+    db.close()

@@ -93,4 +93,12 @@ for line in sys.stdin:
         XCTAssertEqual(model.message,errorMessage("invalid_url"))
         try await client.shutdown()
     }
+    func testRepeatedImmediateExitDoesNotLeaveShutdownWaiting() async throws {
+        let url=try fixture(hello)
+        for _ in 0..<20 {
+            let client=BackendClient(handshakeSeconds:1,shutdownSeconds:0.2)
+            try await client.start(executableURL:url)
+            try await client.shutdown()
+        }
+    }
 }

@@ -1,11 +1,13 @@
 import Foundation
 import Darwin
 
-actor BackendClient {
+actor BackendClient: BackendConnection {
+    private(set) var capabilities: Set<String> = []
     nonisolated let events: AsyncStream<BackendEvent>
     private let continuation: AsyncStream<BackendEvent>.Continuation
     private let writeQueue = DispatchQueue(label:"Fetchmunk.backend.write")
     private var process: Process?
+    private var processExit: Task<Void,Never>?
     private var input: FileHandle?
     private var decoder = FrameDecoder()
     private var hello: CheckedContinuation<Void, Error>?
@@ -26,10 +28,14 @@ actor BackendClient {
         let p = Process(); let stdin = Pipe(); let stdout = Pipe()
         p.executableURL = executableURL; p.standardInput = stdin; p.standardOutput = stdout; p.standardError = FileHandle.nullDevice
         p.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+        let exits = AsyncStream<Void> { c in
+            p.terminationHandler = { _ in c.yield(());c.finish() }
+        }
         process = p; input = stdin.fileHandleForWriting
         try await withCheckedThrowingContinuation { (waiter: CheckedContinuation<Void, Error>) in
             hello = waiter
             do { try p.run() } catch { hello = nil; process = nil; waiter.resume(throwing: error); return }
+            processExit = Task.detached { for await _ in exits {} }
             let seconds = handshakeSeconds
             timers["hello"] = Task { try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000)); if !Task.isCancelled { self.failHandshake() } }
             Task.detached { [weak self] in
@@ -49,6 +55,7 @@ actor BackendClient {
                 switch message["type"].string {
                 case "hello":
                     guard hello != nil else { throw ClientError.protocolError }
+                    capabilities = Set(message["capabilities"].array.compactMap(\.string))
                     connected = true; timers.removeValue(forKey: "hello")?.cancel()
                     hello?.resume(); hello = nil
                 case "response":
@@ -106,7 +113,8 @@ actor BackendClient {
         let seconds = shutdownSeconds
         let killer = Task.detached { try? await Task.sleep(nanoseconds:UInt64(seconds * 1_000_000_000)); if !Task.isCancelled && p.isRunning { kill(p.processIdentifier,SIGKILL) } }
         if connected { _ = try? await request(method:"app.shutdown",params:.object(["operation_id":.string(UUID().uuidString),"reason":.string("quit")])) }
-        await Task.detached { p.waitUntilExit() }.value
-        killer.cancel(); process = nil; continuation.finish()
+        // Process termination notifications avoid waitUntilExit's run-loop race.
+        await processExit?.value
+        killer.cancel();processExit = nil;process = nil;continuation.finish()
     }
 }

@@ -52,7 +52,7 @@ func errorMessage(_ code: String) -> String {
     case "access_denied": return "Serwis odmówił dostępu do materiału."
     case "dependency_unsupported": return "Ta funkcja nie jest dostępna w tym buildzie."
     case "already_running": return "Inna instancja Fetchmunk korzysta już z tych danych."
-    case "history_limit": return "Ten lokalny build obsługuje maksymalnie 1000 zadań. Zachowaj dane i zainstaluj kolejną wersję."
+    case "database_error": return "Nie udało się odczytać lub zapisać bazy zadań. Zachowaj dane i uruchom aplikację ponownie."
     case "schema_too_new": return "Dane pochodzą z nowszej wersji Fetchmunk. Zainstaluj nowszą aplikację."
     case "network_error": return "Nie udało się połączyć ze źródłem. Sprawdź sieć i ponów."
     default: return "Nie udało się ukończyć operacji. Możesz spróbować ponownie."
