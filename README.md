@@ -83,3 +83,15 @@ retroactively. Use a manual run to test the workflow without moving that tag.
 - [Implementation plan](docs/superpowers/plans/2026-10-20-macos-first-build.md)
 
 The design describes the broader target. The verification report records what actually works in this build.
+
+### Alfa 0.3.0
+
+- „Wiele linków…” / ⌘⇧L: do 100 adresów, walidacja, dokładna deduplikacja
+  i atomowe dodanie paczki. Ponowienie po utracie odpowiedzi zachowuje identyfikator operacji.
+- „Sprawdź”: lokalne rozpoznanie wzorca adresu przez gallery-dl, bez pobierania.
+  Nie potwierdza dostępności plików ani uprawnień.
+- Dokładniejsze rozróżnienie typowanych błędów uwierzytelniania, HTTP 403 i sieci.
+
+Plan kolejnych 150 zadań: `docs/superpowers/plans/2026-10-21-next-150.md`.
+Pierwszy etap obejmuje 0.3.0; pozostałe zadania są roadmapą. Logowanie,
+podpis Developer ID/notaryzacja, aktualizator oraz GUI Windows/Linux nadal nie są gotowe.

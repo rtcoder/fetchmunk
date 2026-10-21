@@ -14,6 +14,8 @@ import SwiftUI
                     Button("Nowe pobranie") { model.addressFocusToken += 1 }.keyboardShortcut("l",modifiers:.command)
                 }
                 CommandMenu("Pobieranie") {
+                    Button("Dodaj wiele linków…") { model.showingBatch = true }
+                        .keyboardShortcut("l",modifiers:[.command,.shift]).disabled(!model.batchSupported)
                     Button("Odśwież listę") { Task { await model.refreshHistory() } }
                         .keyboardShortcut("r",modifiers:.command).disabled(!model.ready)
                     Button("Katalog pobierania…") { model.chooseDestination() }

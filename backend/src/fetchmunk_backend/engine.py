@@ -65,7 +65,33 @@ def run_download(request: WorkerRequest, emit) -> WorkerResult:
     original_select = output.select
     output.select = lambda: reporter
 
+    def classify_error(exc):
+        if isinstance(exc, (exception.AuthenticationError, exception.AuthRequired)):
+            return "auth_required"
+        if isinstance(exc, exception.AuthorizationError):
+            return "access_denied"
+        if isinstance(exc, exception.HttpError):
+            return "access_denied" if exc.status == 403 else "network_error"
+        if isinstance(exc, exception.NoExtractorError):
+            return "unsupported_url"
+        if isinstance(exc, PermissionError):
+            return "permission_denied"
+        if isinstance(exc, OSError) and exc.errno == 28:
+            return "disk_full"
+        return None
+
     class DownloadJob(job.DownloadJob):
+        def dispatch(self, messages):
+            # Job.run consumes extractor exceptions before returning a bitmask.
+            # Capture the actual type here, including jobs queued by extractors.
+            try:
+                return super().dispatch(messages)
+            except Exception as exc:
+                code = classify_error(exc)
+                if code:
+                    result.error_code = code
+                raise
+
         def initialize(self, kwdict=None):
             super().initialize(kwdict)
             hooks = collections.defaultdict(list, self.hooks)
@@ -80,13 +106,14 @@ def run_download(request: WorkerRequest, emit) -> WorkerResult:
         def emit(self, record):
             # Inspect typed exceptions, never forward arbitrary messages/URLs.
             exc = record.exc_info[1] if record.exc_info else None
-            if isinstance(exc, PermissionError):
-                result.error_code = "permission_denied"
-            elif isinstance(exc, OSError) and exc.errno == 28:
-                result.error_code = "disk_full"
+            code = classify_error(exc)
+            if code:
+                result.error_code = code
 
     handler = Errors()
-    logger = logging.getLogger("gallery-dl")
+    # Extractor loggers are named by category, not under "gallery-dl".
+    # This adapter runs in a dedicated worker; sink all root output locally.
+    logger = logging.getLogger()
     old_handlers, old_propagate = logger.handlers[:], logger.propagate
     logger.handlers, logger.propagate = [handler], False
     try:
@@ -99,14 +126,8 @@ def run_download(request: WorkerRequest, emit) -> WorkerResult:
             status = task.run()
         if status and not result.error_code:
             result.error_code = "engine_error"
-    except exception.NoExtractorError:
-        result.error_code = "unsupported_url"
-    except PermissionError:
-        result.error_code = "permission_denied"
-    except OSError as exc:
-        result.error_code = "disk_full" if exc.errno == 28 else "engine_error"
-    except Exception:
-        result.error_code = "engine_error"
+    except Exception as exc:
+        result.error_code = classify_error(exc) or "engine_error"
     finally:
         util.expand_path = original_expand
         output.select = original_select

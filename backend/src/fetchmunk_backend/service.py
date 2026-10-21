@@ -2,10 +2,11 @@
 
 import json, os, queue, sqlite3, sys, threading, time, uuid
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlunsplit
 from . import __version__
 from .models import WorkerRequest
 from .store import JobStore, StoreError, timestamp
+from .url_validation import validate_url
 from .snapshots import SnapshotStore, SnapshotError
 from .supervisor import WorkerSupervisor
 from .wire import FrameDecoder, ProtocolError, encode_frame
@@ -91,6 +92,9 @@ class JobService:
                             params.get("query", "")
                         )
                     )
+                elif method == "sources.inspect":
+                    from .sources import inspect_source
+                    result = inspect_source(params.get("url"))
                 elif method.startswith("auth."):
                     raise StoreError("dependency_unsupported")
                 elif method == "app.shutdown":
@@ -99,6 +103,7 @@ class JobService:
                     result = {"accepted": True}
                 elif method in {
                     "jobs.create",
+                    "jobs.create_many",
                     "jobs.cancel",
                     "jobs.retry",
                     "queue.set_enabled",
@@ -206,54 +211,19 @@ class JobService:
             )
             effects.append(("queue", p["enabled"]))
             return {"queue_enabled": p["enabled"]}
-        if method == "jobs.create":
-            url = p.get("url")
-            try:
-                parsed = urlsplit(url)
-                valid = (
-                    isinstance(url, str)
-                    and len(url) <= 16384
-                    and parsed.scheme in {"http", "https"}
-                    and bool(parsed.hostname)
-                    and not parsed.username
-                    and not parsed.password
-                    and not any(c.isspace() for c in url)
-                )
-            except (ValueError, TypeError):
-                valid = False
-            if not valid:
-                raise StoreError("invalid_url")
+        if method in {"jobs.create", "jobs.create_many"}:
+            urls = p.get("urls") if method == "jobs.create_many" else [p.get("url")]
+            if not isinstance(urls, list) or not 1 <= len(urls) <= 100:
+                raise StoreError("invalid_params")
+            parsed_urls = [(url, validate_url(url)) for url in urls]
+            if method == "jobs.create_many" and sum(len(url.encode("utf-8")) for url in urls) > 524288:
+                raise StoreError("invalid_params")
             dest = self.absolute_path(p.get("destination"))
-            jid = str(uuid.uuid4())
-            out = dest / ("Fetchmunk-" + jid[:12])
-            while out.exists():
-                jid = str(uuid.uuid4())
-                out = dest / ("Fetchmunk-" + jid[:12])
-            now = timestamp()
-            job = {
-                "job_id": jid,
-                "revision": 1,
-                "attempt": 1,
-                "state": "queued",
-                "url": url,
-                "display_url": urlunsplit(
-                    (parsed.scheme, parsed.netloc, parsed.path, "", "")
-                ),
-                "destination": str(dest),
-                "output_dir": str(out),
-                "created_at": now,
-                "updated_at": now,
-                "auth_ref": None,
-                "downloaded": 0,
-                "skipped": 0,
-                "failed_files": 0,
-                "current_file": None,
-                "wait_until": None,
-                "error": None,
-            }
-            self.store.save_job(job, db)
-            effects.append(("job", job))
-            return {"job_id": jid, "revision": 1}
+            unique = dict(parsed_urls)
+            jobs = [self.create_job(url, parsed, dest, db, effects) for url, parsed in unique.items()]
+            if method == "jobs.create":
+                return jobs[0]
+            return {"jobs": jobs, "created_count": len(jobs), "duplicate_count": len(urls) - len(jobs)}
         job = self.store.get_job(p.get("job_id"))
         if method == "jobs.cancel":
             if job["state"] not in ACTIVE | {"queued", "needs_auth"}:
@@ -283,6 +253,38 @@ class JobService:
         self.store.save_job(job, db)
         effects.insert(0, ("job", job))
         return job
+
+    def create_job(self, url, parsed, dest, db, effects):
+        jid = str(uuid.uuid4())
+        out = dest / ("Fetchmunk-" + jid[:12])
+        while out.exists():
+            jid = str(uuid.uuid4())
+            out = dest / ("Fetchmunk-" + jid[:12])
+        now = timestamp()
+        job = {
+            "job_id": jid,
+            "revision": 1,
+            "attempt": 1,
+            "state": "queued",
+            "url": url,
+            "display_url": urlunsplit(
+                (parsed.scheme, parsed.netloc, parsed.path, "", "")
+            ),
+            "destination": str(dest),
+            "output_dir": str(out),
+            "created_at": now,
+            "updated_at": now,
+            "auth_ref": None,
+            "downloaded": 0,
+            "skipped": 0,
+            "failed_files": 0,
+            "current_file": None,
+            "wait_until": None,
+            "error": None,
+        }
+        self.store.save_job(job, db)
+        effects.append(("job", job))
+        return {"job_id": jid, "revision": 1}
 
     def pump(self):
         if (
@@ -486,7 +488,7 @@ def serve():
             "session_id": service.session_id,
             "backend_version": __version__,
             "engine_version": engine_version,
-            "capabilities": ["jobs", "paged_jobs", "history_search"],
+            "capabilities": ["jobs", "paged_jobs", "history_search", "batch_jobs", "source_inspection"],
         }
     )
     try:

@@ -289,3 +289,23 @@ następnej strony może użyć indeksu state. Dowolny podciąg wymaga skanowania
 pól JSON kandydatów i może
 być wolniejszy dla dużej historii. RAM stron i cache odczytu pozostaje
 ograniczony. Nie zmienia to schematu bazy (wersja 2).
+
+## Batch and source inspection (0.3.0)
+
+Capabilities: `batch_jobs`, `source_inspection`.
+
+`jobs.create_many`: `{operation_id, urls: [string], destination}` returns
+`{jobs: [{job_id, revision}], created_count, duplicate_count}`. Accepts 1–100
+input addresses, at most 16384 Unicode scalars each and 524288 total UTF-8
+bytes before deduplication. Exact duplicates are removed preserving first
+occurrence. Validation and insertion are atomic; events and worker scheduling
+follow commit. Retry the identical parameters and operation_id after an
+uncertain response. Reusing the ID with changed parameters is a conflict.
+URLs must be HTTP/HTTPS with a host, valid port, no userinfo, whitespace or
+control characters. These URL rules also apply to single creation.
+
+`sources.inspect`: `{url}` returns `{supported, category, subcategory}`;
+category/subcategory may be null. Uses pinned gallery-dl class patterns without
+extractor construction, extraction, network, user config or cookies. Recognition
+is not proof of availability, authorization or a successful download. This
+uses an upstream private API and must be regression-tested on engine updates.

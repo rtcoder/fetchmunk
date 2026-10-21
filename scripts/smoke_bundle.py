@@ -106,6 +106,20 @@ def check(app):
                 page = call("jobs.snapshot", filter="history")
                 assert [j["job_id"] for j in page["jobs"]] == [created["job_id"]]
                 assert page["next_cursor"] is None and page["previous_cursor"] is None
+                assert {"batch_jobs", "source_inspection"}.issubset(hello["capabilities"])
+                inspected = call("sources.inspect", url=params["url"])
+                assert inspected["supported"] is True, inspected
+                call("queue.set_enabled", enabled=False)
+                batch_params = dict(urls=[params["url"], params["url"] + "?batch=2", params["url"]], destination=tmp + "/batch")
+                batch = call("jobs.create_many", **batch_params)
+                assert batch["created_count"] == 2 and batch["duplicate_count"] == 1, batch
+                assert call("jobs.create_many", **batch_params) == batch
+                for item in batch["jobs"]:
+                    queued = call("jobs.get", job_id=item["job_id"])
+                    assert queued["state"] == "queued", queued
+                    cancelled = call("jobs.cancel", operation_id="cancel-" + item["job_id"], job_id=item["job_id"])
+                    assert cancelled["state"] == "cancelled", cancelled
+                assert call("jobs.summary")["total"] == 3
                 call("app.shutdown", reason="quit")
                 p.wait(timeout=10)
                 assert p.returncode == 0, p.stderr.read()
@@ -120,6 +134,7 @@ def check(app):
                             "idempotency": "PASS",
                             "shutdown": "PASS",
                             "bundle_metadata": "PASS",
+                            "batch_and_source_inspection": "PASS",
                             "missing_license_texts": manifest["missing_license_texts"],
                         },
                         indent=2,

@@ -43,17 +43,21 @@ struct MainView: View {
                         Image(systemName:"link").foregroundStyle(.secondary)
                         TextField("https://…",text:$model.inputURL).textFieldStyle(.plain).font(.system(size:14))
                             .focused($urlFocused).onSubmit { Task { await model.add() } }.accessibilityLabel("Adres galerii lub pliku")
+                        Button(model.inspecting ? "Sprawdzanie…" : "Sprawdź") { Task { await model.inspectSource() } }
+                            .disabled(!model.ready || !model.sourceInspectionSupported || model.inspecting || model.inputURL.isEmpty)
                         Button { Task { await model.add() } } label: {
                             HStack(spacing:7) { Image(systemName:"arrow.down");Text(model.adding ? "Dodawanie…" : "Pobierz") }.padding(.horizontal,10).padding(.vertical,5)
                         }.buttonStyle(.borderedProminent).tint(fetchmunkAccent)
                             .disabled(!model.ready || model.adding || model.inputURL.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                     }
+                    if let inspection = model.inspectionMessage { Text(inspection).font(.caption).foregroundStyle(.secondary).accessibilityLabel(inspection) }
                     Divider()
                     HStack {
                         Image(systemName:"folder").foregroundStyle(fetchmunkAccent)
                         Text(model.destination.path.replacingOccurrences(of:FileManager.default.homeDirectoryForCurrentUser.path,with:"~"))
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).help(model.destination.path)
                         Spacer()
+                        Button("Wiele linków…") { model.showingBatch = true }.disabled(!model.batchSupported)
                         Button("Zmień…") { model.chooseDestination() }.buttonStyle(.plain).font(.caption).foregroundStyle(fetchmunkAccent)
                     }
                 }.padding(18).background(.background,in:RoundedRectangle(cornerRadius:14))
@@ -102,6 +106,7 @@ struct MainView: View {
                 }
             }.padding(28).frame(minWidth:570,minHeight:500).background(Color(nsColor:.windowBackgroundColor))
         }.frame(minWidth:870,minHeight:660).onAppear { urlFocused=true }
+            .sheet(isPresented:$model.showingBatch) { BatchAddView(model:model) }
             .onChange(of:model.addressFocusToken) { _ in urlFocused=true }
     }
     private var sectionTitle: String {

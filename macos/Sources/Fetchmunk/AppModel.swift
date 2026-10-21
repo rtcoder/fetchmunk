@@ -12,7 +12,59 @@ import AppKit
     @Published var cancelledCount = 0
     @Published var searchInput = ""
     @Published var addressFocusToken = 0
-    @Published var inputURL = ""
+    @Published var inputURL = "" { didSet { if oldValue != inputURL { invalidateInspection() } } }
+    @Published var addingBatch = false
+    @Published var hasPendingBatch = false
+    @Published var batchDraft = ""
+    @Published var batchMessage: String?
+    @Published var batchSupported = false
+    @Published var showingBatch = false
+    @Published var sourceInspectionSupported = false
+    @Published var inspecting = false
+    @Published var inspectionMessage: String?
+    private var inspectionGeneration = 0
+    private var pendingBatch: JSONValue?
+    var batchDestination: URL { pendingBatch?["destination"].string.map { URL(fileURLWithPath:$0) } ?? destination }
+    private func invalidateInspection() {
+        inspectionGeneration += 1; inspecting = false; inspectionMessage = nil
+    }
+    func inspectSource() async {
+        guard ready, sourceInspectionSupported, !inspecting, let client else { return }
+        let url = inputURL.trimmingCharacters(in:.whitespacesAndNewlines)
+        guard !url.isEmpty else { return }
+        inspectionGeneration += 1
+        let token = inspectionGeneration
+        inspecting = true; inspectionMessage = nil
+        defer { if token == inspectionGeneration { inspecting = false } }
+        do {
+            let result = try await client.request(method:"sources.inspect",params:.object(["url":.string(url)]))
+            guard token == inspectionGeneration else { return }
+            guard let supported = result["supported"].bool else { throw ClientError.backend("protocol_error") }
+            inspectionMessage = supported
+                ? "Rozpoznano: \(result["category"].string ?? "źródło"). Rozpoznanie adresu nie potwierdza dostępności ani uprawnień."
+                : "Silnik nie rozpoznaje tego adresu. Sprawdź link do galerii lub pliku."
+        } catch { if token == inspectionGeneration { inspectionMessage = error.localizedDescription } }
+    }
+    func addBatch(urls: [String]) async -> Bool {
+        guard ready, batchSupported, !addingBatch, let client else { return false }
+        guard pendingBatch != nil || !urls.isEmpty else { return false }
+        addingBatch = true; batchMessage = nil
+        defer { addingBatch = false }
+        let params = pendingBatch ?? .object(["operation_id":.string(UUID().uuidString),"urls":.array(urls.map { .string($0) }),"destination":.string(destination.path)])
+        pendingBatch = params; hasPendingBatch = true
+        do {
+            let result = try await client.request(method:"jobs.create_many",params:params)
+            guard let count = result["created_count"].int, count > 0, result["jobs"].array.count == count else { throw ClientError.backend("protocol_error") }
+            pendingBatch = nil; hasPendingBatch = false; batchDraft = ""; searchInput = ""
+            await refreshSummary(); await loadPage(filter:"all",query:"")
+            return true
+        } catch ClientError.backend(let code) where code != "protocol_error" {
+            pendingBatch = nil; hasPendingBatch = false; batchMessage = errorMessage(code)
+        } catch {
+            batchMessage = error.localizedDescription + " Ponów, aby sprawdzić tę samą paczkę bez tworzenia duplikatów."
+        }
+        return false
+    }
     @Published var destination: URL
     @Published var ready = false
     @Published var connecting = false
@@ -49,6 +101,8 @@ import AppKit
         do {
             try await backend.start(executableURL:executable)
             guard await backend.capabilities.isSuperset(of: ["paged_jobs", "history_search"]) else { throw ClientError.backend("dependency_unsupported") }
+            batchSupported = await backend.capabilities.contains("batch_jobs")
+            sourceInspectionSupported = await backend.capabilities.contains("source_inspection")
             eventTask = Task { [weak self] in
                 for await event in backend.events {
                     guard !Task.isCancelled else { break }
@@ -66,7 +120,7 @@ import AppKit
     }
     func consume(_ event: JSONValue) async {
         if event["event"].string == "connection.closed" {
-            ready = false
+            ready = false; invalidateInspection()
             if !shuttingDown { message = ClientError.disconnected.localizedDescription }
             return
         }
