@@ -1,4 +1,4 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 
 
@@ -9,6 +9,9 @@ class WorkerRequest:
     url: str
     output_dir: Path
     archive_path: Path
+    credentials: dict | None = field(default=None, repr=False)
+    engine: str = "gallery-dl"
+    credential_path: str | None = None
 
 
 @dataclass

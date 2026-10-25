@@ -18,6 +18,7 @@ enum AppInfo {
 
 struct AppSettingsView: View {
     @ObservedObject var model: AppModel
+    @State private var showingCredentials = false
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
     var body: some View {
         Form {
@@ -32,14 +33,19 @@ struct AppSettingsView: View {
                 Text("Zmiana dotyczy nowych zadań. Pliki z wcześniejszych pobrań pozostają na swoim miejscu.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("Logowanie") {
+                Button("Dane logowania do YouTube i CDA…") { showingCredentials = true }.disabled(!model.ready)
+                Text("Zaszyfrowane dane są przechowywane lokalnie. Możesz je zastąpić lub usunąć.").font(.caption).foregroundStyle(.secondary)
+            }
             Section("O aplikacji") {
                 Text("Fetchmunk \(AppInfo.version)")
-                Text("Ten build obsługuje publiczne źródła. Logowanie i automatyczne aktualizacje nie są jeszcze dostępne.")
+                Text("Automatyczne aktualizacje nie są jeszcze dostępne.")
                     .font(.caption).foregroundStyle(.secondary)
                 Text("Wstrzymanie kolejki zatrzymuje uruchamianie następnych zadań. Aktywny transfer możesz anulować.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-        }.formStyle(.grouped).padding(16).frame(width:510,height:390)
+        }.formStyle(.grouped).padding(16).frame(width:540,height:510)
+            .sheet(isPresented:$showingCredentials) { CredentialSettingsView(request:model.credentialRequest) }
             .preferredColorScheme((AppAppearance(rawValue:appearance) ?? .system).colorScheme)
     }
 }

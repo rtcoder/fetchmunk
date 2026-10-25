@@ -15,10 +15,11 @@ actor BackendClient: BackendConnection {
     private var timers: [String: Task<Void, Never>] = [:]
     private let handshakeSeconds: Double
     private let requestSeconds: Double
+    private let authRequestSeconds: Double
     private let shutdownSeconds: Double
     private var connected = false
-    init(handshakeSeconds: Double = 10, requestSeconds: Double = 5, shutdownSeconds: Double = 10) {
-        self.handshakeSeconds = handshakeSeconds; self.requestSeconds = requestSeconds; self.shutdownSeconds = shutdownSeconds
+    init(handshakeSeconds: Double = 10, requestSeconds: Double = 5, shutdownSeconds: Double = 10, authRequestSeconds: Double = 120) {
+        self.handshakeSeconds = handshakeSeconds; self.requestSeconds = requestSeconds; self.shutdownSeconds = shutdownSeconds; self.authRequestSeconds = authRequestSeconds
         var c: AsyncStream<BackendEvent>.Continuation!
         events = AsyncStream(bufferingPolicy: .bufferingNewest(1024)) { c = $0 }; continuation = c
     }
@@ -72,6 +73,8 @@ actor BackendClient: BackendConnection {
         } catch { abort(ClientError.protocolError) }
     }
     func request(method: String, params: JSONValue) async throws -> JSONValue {
+        // Keychain/browser consent can take time; never repeat secret-bearing requests automatically.
+        if method.hasPrefix("auth.") { return try await sendOnce(method:method, params:params) }
         // A lost reply may follow a committed mutation. Preserve operation_id.
         do { return try await sendOnce(method:method, params:params) }
         catch ClientError.timeout { return try await sendOnce(method:method, params:params) }
@@ -84,7 +87,7 @@ actor BackendClient: BackendConnection {
         guard data.count <= 1_048_576 else { throw ClientError.protocolError }
         return try await withCheckedThrowingContinuation { waiter in
             pending[id] = waiter
-            let seconds = requestSeconds
+            let seconds = method.hasPrefix("auth.") ? authRequestSeconds : requestSeconds
             timers[id] = Task { try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000)); if !Task.isCancelled { self.expire(id) } }
             // FileHandle write may block if the backend is stuck; keep actor responsive.
             writeQueue.async { [weak self] in

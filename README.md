@@ -95,3 +95,21 @@ The design describes the broader target. The verification report records what ac
 Plan kolejnych 150 zadań: `docs/superpowers/plans/2026-10-21-next-150.md`.
 Pierwszy etap obejmuje 0.3.0; pozostałe zadania są roadmapą. Logowanie,
 podpis Developer ID/notaryzacja, aktualizator oraz GUI Windows/Linux nadal nie są gotowe.
+
+### Alfa 0.4.0 — poświadczenia i wideo
+
+- Dodatkowy silnik yt-dlp dla YouTube/CDA; automatyczny wybór najlepszej dostępnej
+  jakości oraz łączenie obrazu i dźwięku. FFmpeg/Deno są dołączone do aplikacji.
+- Okno „Logowanie do serwisów”: CDA login/hasło, cookies z wybranej przeglądarki
+  po zgodzie lub pliku Netscape; lista, zastępowanie i usuwanie, bez ujawniania hasła.
+- AES-256-GCM; losowy klucz w natywnym magazynie systemowym. Brak plaintext fallback.
+- Klucz utracony/uszkodzony rekord: trzeba podać dane ponownie. Odmowa dostępu
+  do magazynu nie kasuje danych. Worker musi chwilowo odszyfrować poświadczenia;
+  nie jest to system „zero knowledge”, ani ochrona przed przejęciem działającego procesu.
+- Bez automatycznego obcinania subdomen: przygotowany rejestr jawnych aliasów jest
+  pusty do czasu otrzymania i weryfikacji rzeczywistych przykładów.
+
+Katalogi ekstraktorów i przykładowych adresów: `docs/sources/` (JSON i TXT).
+Ograniczenia platform: `docs/security/browser-access-platforms.md`.
+Nie sprawdzono kont użytkownika, rzeczywistych materiałów CDA Premium ani profili
+przeglądarek. Windows/Linux mają kontrakty/adaptery, ale nie gotowe GUI/buildy.

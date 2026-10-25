@@ -4,7 +4,11 @@ from .url_validation import validate_url
 
 
 def inspect_source(url: str) -> dict:
-    validate_url(url)
+    url = normalize_source_url(url)
+    from .browser_credentials import service_for_url
+    service = service_for_url(url)
+    if service:
+        return {'supported': True, 'category': service, 'subcategory': 'video', 'engine': 'yt-dlp'}
     from gallery_dl import extractor
 
     # Pinned private API: preserve find() precedence but never instantiate an
@@ -17,3 +21,18 @@ def inspect_source(url: str) -> dict:
                 'subcategory': cls.subcategory or None,
             }
     return {'supported': False, 'category': None, 'subcategory': None}
+
+# Populate only after a real source example proves equivalence. No wildcard or
+# public-suffix guessing: language-looking subdomains are not inherently aliases.
+SOURCE_ALIASES: dict[str, str] = {}
+
+def normalize_source_url(url: str, aliases=None) -> str:
+    from urllib.parse import urlunsplit
+    parsed = validate_url(url)
+    target = (SOURCE_ALIASES if aliases is None else aliases).get(parsed.hostname.lower())
+    if target is None:
+        return url
+    netloc = target + (':' + str(parsed.port) if parsed.port is not None else '')
+    normalized = urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))
+    validate_url(normalized)
+    return normalized

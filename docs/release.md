@@ -60,3 +60,16 @@ selected distribution metadata supplied text, not that the release audit is done
 - Run Python, Swift and packaging tests; build and smoke-test the app and mounted
   DMG; verify hashes of the final distributed artifact and record exact versions.
 - Decide and document update delivery and support policy before promising updates.
+
+## Additional 0.4.0 runtime provenance
+
+Pinned imageio-ffmpeg 0.6.0 bundles FFmpeg7.1 arm64 with --enable-gpl;
+`ffmpeg -L` reports GPL2-or-later. The wrapper's BSD license is not the binary's
+license. Packaging now includes the FFmpeg n7.1 COPYING.GPLv2 text separately.
+FFmpeg embeds third-party codecs; corresponding sources/build recipes and license
+coverage must be completed before treating this alpha as a public production
+release. Merely including a license file is not a full compliance claim.
+Runtime origin: https://github.com/imageio/imageio-ffmpeg/tree/v0.6.0
+FFmpeg source: https://github.com/FFmpeg/FFmpeg/tree/n7.1
+Deno package/runtime, yt-dlp-ejs and cryptography are included in build inventory;
+vendored native code remains part of the existing native/transitive audit scope.

@@ -9,6 +9,24 @@ from .models import WorkerRequest, WorkerEvent, WorkerResult
 
 
 def run_download(request: WorkerRequest, emit) -> WorkerResult:
+    from dataclasses import replace
+    from .sources import normalize_source_url
+    request = replace(request, url=normalize_source_url(request.url))
+    from .browser_credentials import service_for_url
+    if request.engine == "yt-dlp" or service_for_url(request.url):
+        from .video_engine import run_video
+        service = service_for_url(request.url)
+        if service and request.credential_path:
+            from .credentials import Vault, VaultError
+            try:
+                vault = Vault(Path(request.credential_path))
+                credentials = vault.resolve(service)
+                if vault.last_reset:
+                    return WorkerResult(error_code="credential_lost")
+            except VaultError as error:
+                return WorkerResult(error_code=error.code)
+            request = replace(request, credentials=credentials)
+        return run_video(request, emit)
     from gallery_dl import config, job, output, exception, util
 
     result = WorkerResult()

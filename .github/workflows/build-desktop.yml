@@ -75,6 +75,9 @@ jobs:
       - name: Smoke test packaged application
         run: backend/.venv/bin/python scripts/smoke_bundle.py --app dist/Fetchmunk.app
 
+      - name: Smoke test packaged video runtimes and quality selection
+        run: backend/.venv/bin/python scripts/smoke_video_bundle.py --app dist/Fetchmunk.app
+
       - name: Smoke test read-only DMG
         run: |
           mount_dir="$RUNNER_TEMP/fetchmunk-dmg"

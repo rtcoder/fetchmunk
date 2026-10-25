@@ -11,7 +11,7 @@ struct BatchAddView: View {
     var body: some View {
         VStack(alignment:.leading, spacing:16) {
             Text("Dodaj wiele linków").font(.title2.bold())
-            Text("Jeden adres w wierszu · maksymalnie 100 wierszy\nTen build obsługuje publiczne źródła. Logowanie pojawi się później.")
+            Text("Jeden adres w wierszu · maksymalnie 100 wierszy\nDane logowania do YouTube i CDA dodasz w oknie Logowanie.")
                 .font(.callout).foregroundStyle(.secondary)
             HStack {
                 Text("Adresy HTTP/HTTPS").font(.headline)

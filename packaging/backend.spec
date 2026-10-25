@@ -1,12 +1,17 @@
-from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files, copy_metadata
 from pathlib import Path
 import json
 root = Path(SPECPATH).parent
-hidden = collect_submodules('gallery_dl')
+import deno
+hidden = collect_submodules('gallery_dl') + collect_submodules('yt_dlp') + collect_submodules('yt_dlp_ejs') + ['keyring.backends.macOS', 'keyring.backends.macOS.api']
+video_data = collect_data_files('yt_dlp_ejs') + collect_data_files('imageio_ffmpeg') + copy_metadata('yt-dlp') + copy_metadata('yt-dlp-ejs')
+video_binaries = [(str(Path(deno.find_deno_bin()).resolve()), 'deno-bin')]
+
 a = Analysis([str(root/'backend/src/fetchmunk_backend/__main__.py')],
              pathex=[str(root/'backend/src')],
-             datas=collect_data_files('gallery_dl') + collect_data_files('certifi'),
-             hiddenimports=hidden, excludes=['pytest','requests_mock','yt_dlp','tkinter'])
+             datas=collect_data_files('gallery_dl') + collect_data_files('certifi') + video_data,
+             binaries=video_binaries,
+             hiddenimports=hidden, excludes=['pytest','requests_mock','tkinter'])
 # Inventory contains build-local paths only and is never copied into the app.
 # Match collected source files to installed dist-info records, including runtime hooks.
 (root / 'build' / 'runtime-sources.json').write_text(json.dumps(

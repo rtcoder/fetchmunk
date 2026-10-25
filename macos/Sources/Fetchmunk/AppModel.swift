@@ -19,6 +19,11 @@ import AppKit
     @Published var batchMessage: String?
     @Published var batchSupported = false
     @Published var showingBatch = false
+    @Published var showingCredentials = false
+    func credentialRequest(method: String, params: JSONValue) async throws -> JSONValue {
+        guard ready, let client else { throw ClientError.disconnected }
+        return try await client.request(method:method, params:params)
+    }
     @Published var sourceInspectionSupported = false
     @Published var inspecting = false
     @Published var inspectionMessage: String?

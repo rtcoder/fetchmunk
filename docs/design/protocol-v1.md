@@ -309,3 +309,28 @@ category/subcategory may be null. Uses pinned gallery-dl class patterns without
 extractor construction, extraction, network, user config or cookies. Recognition
 is not proof of availability, authorization or a successful download. This
 uses an upstream private API and must be regression-tested on engine updates.
+
+## Local credentials and video (0.4.0)
+
+Capabilities `credentials`, `video_downloads`. `auth.*` are NEVER journaled in
+SQLite operations. Requests travel only through the local process pipe, not argv.
+Frontend timeout is 120 s, with no automatic retry; saving uses a caller-generated
+lowercase UUID profile ID and atomically replaces the service profile.
+
+- `auth.list {}` → `{profiles:[{id,service,label,kind}],reset:boolean}`; no secrets.
+- `auth.browsers {}` → `{browsers:[{id,status}]}`; policy, not installed-profile scan.
+- `auth.save {id,service,label,kind:"password",secret:{username,password}}` (CDA).
+- `auth.import_text {id,service,label,text}` imports scoped Netscape cookies.
+- `auth.import_browser {id,service,label,browser,profile?,consent:true}`.
+- `auth.delete {id}` removes encrypted credentials, leaving downloaded files.
+
+Initial service IDs: `youtube`, `cda`; one profile each. Labels are unverified
+user-provided metadata. No read/reveal/export-secret method. Cookies are domain
+scoped; host-only remains host-only. Maximum incoming file:512KiB; normalized
+secret JSON:256KiB to stay below worker IPC bound even with Unicode escaping.
+OS key errors preserve encrypted records; confirmed missing key discards unreadable
+profiles. Invalid GCM tag discards only the affected unreadable profile.
+
+Video downloads discover formats with authentication before selecting best
+playable video+audio or combined format. FFmpeg and Deno ship with the app.
+No playlist UI, bypass of DRM, remote plugin loading or authentication guarantee.

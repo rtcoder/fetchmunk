@@ -18,6 +18,7 @@ import SwiftUI
                         .keyboardShortcut("l",modifiers:[.command,.shift]).disabled(!model.batchSupported)
                     Button("Odśwież listę") { Task { await model.refreshHistory() } }
                         .keyboardShortcut("r",modifiers:.command).disabled(!model.ready)
+                    Button("Logowanie do serwisów…") { model.showingCredentials = true }.disabled(!model.ready)
                     Button("Katalog pobierania…") { model.chooseDestination() }
                     Divider()
                     Button("Wszystkie") { Task { await model.select("all") } }.keyboardShortcut("1",modifiers:.command)

@@ -25,12 +25,12 @@ enum JobPresentation {
     }
     static func errorHelp(_ code: String) -> String {
         switch code {
-        case "unsupported_url": return "Sprawdź adres materiału. To źródło może nie być obsługiwane przez dołączoną wersję gallery-dl."
-        case "auth_required", "auth_expired": return "Źródło wymaga logowania. Ten build nie obsługuje sesji; wybierz publicznie dostępny materiał."
+        case "unsupported_url": return "Sprawdź adres materiału. To źródło może nie być obsługiwane przez dołączone silniki."
+        case "auth_required", "auth_expired": return "Otwórz Logowanie do serwisów, dodaj lub zastąp dane logowania dla YouTube albo CDA, a następnie ponów pobieranie."
         case "permission_denied": return "Wybierz dostępny katalog w ustawieniach i dodaj zadanie ponownie z nową lokalizacją."
         case "disk_full": return "Zwolnij miejsce na dysku docelowym i użyj przycisku Ponów."
         case "network_error": return "Sprawdź połączenie z internetem i użyj przycisku Ponów."
-        case "access_denied": return "Sprawdź, czy materiał jest publiczny i nadal dostępny w serwisie."
+        case "access_denied": return "Sprawdź, czy konto ma dostęp do materiału i czy materiał jest nadal dostępny w serwisie."
         case "dependency_unsupported": return "Ten build nie obsługuje wymaganej funkcji. Sprawdź dostępność nowszego wydania aplikacji."
         default: return "Spróbuj ponownie. Jeśli problem wraca, skopiuj raport diagnostyczny i dołącz go do zgłoszenia błędu."
         }

@@ -57,6 +57,7 @@ struct MainView: View {
                         Text(model.destination.path.replacingOccurrences(of:FileManager.default.homeDirectoryForCurrentUser.path,with:"~"))
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).help(model.destination.path)
                         Spacer()
+                        Button("Logowanie…") { model.showingCredentials = true }.disabled(!model.ready)
                         Button("Wiele linków…") { model.showingBatch = true }.disabled(!model.batchSupported)
                         Button("Zmień…") { model.chooseDestination() }.buttonStyle(.plain).font(.caption).foregroundStyle(fetchmunkAccent)
                     }
@@ -107,6 +108,7 @@ struct MainView: View {
             }.padding(28).frame(minWidth:570,minHeight:500).background(Color(nsColor:.windowBackgroundColor))
         }.frame(minWidth:870,minHeight:660).onAppear { urlFocused=true }
             .sheet(isPresented:$model.showingBatch) { BatchAddView(model:model) }
+            .sheet(isPresented:$model.showingCredentials) { CredentialSettingsView(request:model.credentialRequest) }
             .onChange(of:model.addressFocusToken) { _ in urlFocused=true }
     }
     private var sectionTitle: String {
@@ -142,7 +144,7 @@ struct MainView: View {
                 Image(systemName:"tray.and.arrow.down").font(.system(size:43,weight:.light)).foregroundStyle(fetchmunkAccent.opacity(0.75))
                 Text(model.selection=="all" ? "Twoje pliki zaczynają się od linku." : "Tutaj jeszcze nic nie ma.").font(.system(size:17,weight:.medium,design:.rounded))
                 Text("Bez terminala. Bez ręcznej konfiguracji.").font(.subheadline).foregroundStyle(.secondary)
-                if model.selection=="all" { Text("Ten build obsługuje publiczne źródła. Logowanie pojawi się później.").font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center) }
+                if model.selection=="all" { Text("Dla YouTube i CDA możesz dodać dane w oknie Logowanie.").font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center) }
             }
         }.frame(maxWidth:.infinity,maxHeight:.infinity).padding(24)
     }
