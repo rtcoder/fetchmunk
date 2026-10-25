@@ -22,9 +22,9 @@ def inspect_source(url: str) -> dict:
             }
     return {'supported': False, 'category': None, 'subcategory': None}
 
-# Populate only after a real source example proves equivalence. No wildcard or
-# public-suffix guessing: language-looking subdomains are not inherently aliases.
-SOURCE_ALIASES: dict[str, str] = {}
+# Explicit localized host supplied by the user. No wildcard, guessed languages
+# or changes to the extractor; live availability remains an engine concern.
+SOURCE_ALIASES: dict[str, str] = {"pl.fapello.com": "fapello.com"}
 
 def normalize_source_url(url: str, aliases=None) -> str:
     from urllib.parse import urlunsplit

@@ -106,8 +106,8 @@ podpis Developer ID/notaryzacja, aktualizator oraz GUI Windows/Linux nadal nie s
 - Klucz utracony/uszkodzony rekord: trzeba podać dane ponownie. Odmowa dostępu
   do magazynu nie kasuje danych. Worker musi chwilowo odszyfrować poświadczenia;
   nie jest to system „zero knowledge”, ani ochrona przed przejęciem działającego procesu.
-- Bez automatycznego obcinania subdomen: przygotowany rejestr jawnych aliasów jest
-  pusty do czasu otrzymania i weryfikacji rzeczywistych przykładów.
+- Bez automatycznego obcinania subdomen: rejestr jawnych aliasów zawiera
+  `pl.fapello.com → fapello.com` (od 0.4.1). Inne hosty nie są przepisywane.
 
 Katalogi ekstraktorów i przykładowych adresów: `docs/sources/` (JSON i TXT).
 Ograniczenia platform: `docs/security/browser-access-platforms.md`.
